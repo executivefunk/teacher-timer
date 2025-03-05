@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Button } from "./components/ui/button";
 import { Card, CardContent } from "./components/ui/card";
 import { Progress } from "./components/ui/progress";
@@ -5,7 +6,7 @@ import { Input } from "./components/ui/input";
 
 const workColor = "bg-green-200"; // Productivity color
 const breakColor = "bg-blue-200"; // Relaxing color
-const alertSound = new Audio("/notification.mp3"); // Non-invasive sound alert
+const alertSound = typeof window !== "undefined" ? new Audio("/notification.mp3") : null; // Ensure compatibility with SSR
 
 const schedules = [
   {
@@ -67,13 +68,17 @@ export default function TeacherTimerApp() {
     ]);
   };
 
+  const removeStudent = (index) => {
+    setStudents((prev) => prev.filter((_, i) => i !== index));
+  };
+
   useEffect(() => {
     const interval = setInterval(() => {
       setStudents((prev) => prev.map((student) => {
         if (student.isRunning && student.timeLeft > 0) {
           return { ...student, timeLeft: student.timeLeft - 1 };
         } else if (student.isRunning && student.timeLeft === 0) {
-          alertSound.play();
+          if (alertSound) alertSound.play();
           const nextIndex = student.currentIndex + 1;
           if (nextIndex < student.schedule.times.length) {
             return { ...student, currentIndex: nextIndex, timeLeft: student.schedule.times[nextIndex].duration * 60 };
@@ -123,7 +128,8 @@ export default function TeacherTimerApp() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
         {students.map((student, index) => (
           <Card key={index} className={student.schedule.times[student.currentIndex].label === "Work" ? workColor : breakColor}>
-            <CardContent className="p-4">
+            <CardContent className="p-4 relative">
+              <button className="absolute top-2 right-2 text-red-500" onClick={() => removeStudent(index)}>✖</button>
               <h3 className="text-lg font-semibold">{student.name}</h3>
               <p className="text-md">{student.schedule.times[student.currentIndex].label}: {Math.floor(student.timeLeft / 60)}m {student.timeLeft % 60}s</p>
               <Progress value={(student.timeLeft / (student.schedule.times[student.currentIndex].duration * 60)) * 100} className="mt-2" />
