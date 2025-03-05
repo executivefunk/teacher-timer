@@ -5,9 +5,9 @@ import { Progress } from "./components/ui/progress";
 import { Input } from "./components/ui/input";
 import clsx from "clsx";
 
-const workColor = "bg-green-500 text-white"; // Productivity color
-const breakColor = "bg-blue-500 text-white"; // Relaxing color
-const finishedColor = "bg-red-500 text-white"; // Color when timer ends
+const workColor = "bg-green-500 text-white"; // Darker green for visibility
+const breakColor = "bg-blue-500 text-white"; // Darker blue for visibility
+const finishedColor = "bg-red-500 text-white"; // Clear red when finished
 const alertSound = typeof window !== "undefined" ? new Audio("/notification.mp3") : null; // Ensure compatibility with SSR
 
 const schedules = [
@@ -103,28 +103,19 @@ export default function TeacherTimerApp() {
           placeholder="Student Name"
           value={studentName}
           onChange={(e) => setStudentName(e.target.value)}
+          className="p-2 border rounded"
         />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-          {schedules.map((schedule, index) => (
-            <Card key={index}>
-              <CardContent className="p-4">
-                <h3 className="text-lg font-semibold">{schedule.name}</h3>
-                <p className="text-sm text-gray-600 whitespace-pre-line">{schedule.description}</p>
-                <Button
-                  className="mt-2 w-full"
-                  onClick={() => {
-                    if (studentName) {
-                      addStudent(studentName, schedule);
-                      setStudentName("");
-                    }
-                  }}
-                >
-                  Add Student
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <Button
+          className="mt-2 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-700"
+          onClick={() => {
+            if (studentName) {
+              addStudent(studentName, schedules[0]);
+              setStudentName("");
+            }
+          }}
+        >
+          Add Student
+        </Button>
       </div>
       <h2 className="text-xl font-bold mt-6">Active Students</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
@@ -132,10 +123,10 @@ export default function TeacherTimerApp() {
           <Card key={index} className={clsx("p-4", student.isFinished ? finishedColor : (student.schedule.times[student.currentIndex].label === "Work" ? workColor : breakColor))}>
             <CardContent className="relative">
               <button className="absolute top-2 right-2 text-white bg-red-600 p-1 rounded" onClick={() => removeStudent(index)}>✖</button>
-              <h3 className="text-lg font-semibold">{student.name}</h3>
-              <h4 className="text-md font-semibold text-gray-100">{student.scheduleName}</h4>
-              <p className="text-md">{student.schedule.times[student.currentIndex].label}: {Math.floor(student.timeLeft / 60)}m {student.timeLeft % 60}s</p>
-              <Progress value={(student.timeLeft / (student.schedule.times[student.currentIndex].duration * 60)) * 100} className="mt-2 bg-gray-300" />
+              <h3 className="text-lg font-semibold text-white">{student.name}</h3>
+              <h4 className="text-md font-semibold text-white">{student.scheduleName}</h4>
+              <p className="text-md text-white">{student.schedule.times[student.currentIndex].label}: {Math.floor(student.timeLeft / 60)}m {student.timeLeft % 60}s</p>
+              <Progress value={(student.timeLeft / (student.schedule.times[student.currentIndex].duration * 60)) * 100} className="mt-2 bg-gray-300 h-2 rounded-lg" />
             </CardContent>
           </Card>
         ))}
