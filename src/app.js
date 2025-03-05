@@ -6,6 +6,7 @@ import { Input } from "./components/ui/input";
 
 const workColor = "bg-green-200"; // Productivity color
 const breakColor = "bg-blue-200"; // Relaxing color
+const finishedColor = "bg-red-300"; // Color when timer ends
 const alertSound = typeof window !== "undefined" ? new Audio("/notification.mp3") : null; // Ensure compatibility with SSR
 
 const schedules = [
@@ -64,7 +65,7 @@ export default function TeacherTimerApp() {
   const addStudent = (name, schedule) => {
     setStudents((prev) => [
       ...prev,
-      { name, schedule, currentIndex: 0, timeLeft: schedule.times[0].duration * 60, isRunning: true },
+      { name, schedule, currentIndex: 0, timeLeft: schedule.times[0].duration * 60, isRunning: true, isFinished: false },
     ]);
   };
 
@@ -83,7 +84,7 @@ export default function TeacherTimerApp() {
           if (nextIndex < student.schedule.times.length) {
             return { ...student, currentIndex: nextIndex, timeLeft: student.schedule.times[nextIndex].duration * 60 };
           } else {
-            return { ...student, isRunning: false };
+            return { ...student, isRunning: false, isFinished: true };
           }
         }
         return student;
@@ -127,7 +128,7 @@ export default function TeacherTimerApp() {
       <h2 className="text-xl font-bold mt-6">Active Students</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
         {students.map((student, index) => (
-          <Card key={index} className={student.schedule.times[student.currentIndex].label === "Work" ? workColor : breakColor}>
+          <Card key={index} className={student.isFinished ? finishedColor : (student.schedule.times[student.currentIndex].label === "Work" ? workColor : breakColor)}>
             <CardContent className="p-4 relative">
               <button className="absolute top-2 right-2 text-red-500" onClick={() => removeStudent(index)}>✖</button>
               <h3 className="text-lg font-semibold">{student.name}</h3>
