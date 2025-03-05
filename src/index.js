@@ -1,10 +1,10 @@
 import React from "react";
 import ReactDOM from "react-dom";
-import TeacherTimerApp from "./app";
+import App from "./app"; // Ensure this is lowercase
 
 ReactDOM.render(
   <React.StrictMode>
-    <TeacherTimerApp />
+    <App />
   </React.StrictMode>,
   document.getElementById("root")
 );
