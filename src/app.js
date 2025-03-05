@@ -65,7 +65,7 @@ export default function TeacherTimerApp() {
   const addStudent = (name, schedule) => {
     setStudents((prev) => [
       ...prev,
-      { name, schedule, currentIndex: 0, timeLeft: schedule.times[0].duration * 60, isRunning: true, isFinished: false },
+      { name, schedule, scheduleName: schedule.name, currentIndex: 0, timeLeft: schedule.times[0].duration * 60, isRunning: true, isFinished: false },
     ]);
   };
 
@@ -132,6 +132,7 @@ export default function TeacherTimerApp() {
             <CardContent className="p-4 relative">
               <button className="absolute top-2 right-2 text-red-500" onClick={() => removeStudent(index)}>✖</button>
               <h3 className="text-lg font-semibold">{student.name}</h3>
+              <h4 className="text-md font-semibold text-gray-700">{student.scheduleName}</h4>
               <p className="text-md">{student.schedule.times[student.currentIndex].label}: {Math.floor(student.timeLeft / 60)}m {student.timeLeft % 60}s</p>
               <Progress value={(student.timeLeft / (student.schedule.times[student.currentIndex].duration * 60)) * 100} className="mt-2" />
             </CardContent>
