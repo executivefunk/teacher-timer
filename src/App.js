@@ -1,8 +1,7 @@
-import { useState, useEffect } from "react";
-import { Button } from "../components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { Input } from "@/components/ui/input";
+import { Button } from "./components/ui/button";
+import { Card, CardContent } from "./components/ui/card";
+import { Progress } from "./components/ui/progress";
+import { Input } from "./components/ui/input";
 
 const workColor = "bg-green-200"; // Productivity color
 const breakColor = "bg-blue-200"; // Relaxing color
