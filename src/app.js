@@ -105,7 +105,7 @@ export default function TeacherTimerApp() {
           onChange={(e) => setStudentName(e.target.value)}
           className="p-2 border rounded"
         />
-        <Button
+        <button
           className="mt-2 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-700"
           onClick={() => {
             if (studentName) {
@@ -115,17 +115,17 @@ export default function TeacherTimerApp() {
           }}
         >
           Add Student
-        </Button>
+        </button>
       </div>
       <h2 className="text-xl font-bold mt-6">Active Students</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
         {students.map((student, index) => (
-          <Card key={index} className={clsx("p-4 rounded shadow", student.isFinished ? finishedColor : (student.schedule.times[student.currentIndex].label === "Work" ? workColor : breakColor))}>
+          <Card key={index} className={clsx("p-4 rounded shadow text-black", student.isFinished ? finishedColor : (student.schedule.times[student.currentIndex].label === "Work" ? workColor : breakColor))}>
             <CardContent className="relative">
               <button className="absolute top-2 right-2 text-white bg-red-600 p-1 rounded" onClick={() => removeStudent(index)}>✖</button>
-              <h3 className="text-lg font-semibold text-black">{student.name}</h3>
-              <h4 className="text-md font-semibold text-black">{student.scheduleName}</h4>
-              <p className="text-md text-white">{student.schedule.times[student.currentIndex].label}: {Math.floor(student.timeLeft / 60)}m {student.timeLeft % 60}s</p>
+              <h3 className="text-lg font-semibold">{student.name}</h3>
+              <h4 className="text-md font-semibold">{student.scheduleName}</h4>
+              <p className="text-md">{student.schedule.times[student.currentIndex].label}: {Math.floor(student.timeLeft / 60)}m {student.timeLeft % 60}s</p>
               <Progress value={(student.timeLeft / (student.schedule.times[student.currentIndex].duration * 60)) * 100} className="mt-2 bg-gray-300 h-2 rounded-lg" />
             </CardContent>
           </Card>
