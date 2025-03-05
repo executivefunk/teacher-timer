@@ -3,10 +3,11 @@ import { Button } from "./components/ui/button";
 import { Card, CardContent } from "./components/ui/card";
 import { Progress } from "./components/ui/progress";
 import { Input } from "./components/ui/input";
+import clsx from "clsx";
 
-const workColor = "bg-green-200"; // Productivity color
-const breakColor = "bg-blue-200"; // Relaxing color
-const finishedColor = "bg-red-300"; // Color when timer ends
+const workColor = "bg-green-500 text-white"; // Productivity color
+const breakColor = "bg-blue-500 text-white"; // Relaxing color
+const finishedColor = "bg-red-500 text-white"; // Color when timer ends
 const alertSound = typeof window !== "undefined" ? new Audio("/notification.mp3") : null; // Ensure compatibility with SSR
 
 const schedules = [
@@ -128,13 +129,13 @@ export default function TeacherTimerApp() {
       <h2 className="text-xl font-bold mt-6">Active Students</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
         {students.map((student, index) => (
-          <Card key={index} className={student.isFinished ? finishedColor : (student.schedule.times[student.currentIndex].label === "Work" ? workColor : breakColor)}>
-            <CardContent className="p-4 relative">
-              <button className="absolute top-2 right-2 text-red-500" onClick={() => removeStudent(index)}>✖</button>
+          <Card key={index} className={clsx("p-4", student.isFinished ? finishedColor : (student.schedule.times[student.currentIndex].label === "Work" ? workColor : breakColor))}>
+            <CardContent className="relative">
+              <button className="absolute top-2 right-2 text-white bg-red-600 p-1 rounded" onClick={() => removeStudent(index)}>✖</button>
               <h3 className="text-lg font-semibold">{student.name}</h3>
-              <h4 className="text-md font-semibold text-gray-700">{student.scheduleName}</h4>
+              <h4 className="text-md font-semibold text-gray-100">{student.scheduleName}</h4>
               <p className="text-md">{student.schedule.times[student.currentIndex].label}: {Math.floor(student.timeLeft / 60)}m {student.timeLeft % 60}s</p>
-              <Progress value={(student.timeLeft / (student.schedule.times[student.currentIndex].duration * 60)) * 100} className="mt-2" />
+              <Progress value={(student.timeLeft / (student.schedule.times[student.currentIndex].duration * 60)) * 100} className="mt-2 bg-gray-300" />
             </CardContent>
           </Card>
         ))}
