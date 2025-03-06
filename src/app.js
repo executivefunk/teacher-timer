@@ -68,7 +68,6 @@ export default function TeacherTimerApp() {
       scheduleName: schedule.name,
       currentIndex: 0,
       timeLeft: schedule.times[0].duration * 60,
-      startTime: Date.now(),
       isRunning: true,
       isFinished: false,
     };
@@ -82,10 +81,9 @@ export default function TeacherTimerApp() {
         prev.map((student) => {
           if (!student.isRunning) return student;
 
-          const now = Date.now();
-          const elapsedSeconds = Math.floor((now - student.startTime) / 1000);
-
-          if (elapsedSeconds >= student.timeLeft) {
+          if (student.timeLeft > 0) {
+            return { ...student, timeLeft: student.timeLeft - 1 };
+          } else {
             if (alertSound) alertSound.play();
             const nextIndex = student.currentIndex + 1;
 
@@ -94,14 +92,11 @@ export default function TeacherTimerApp() {
                 ...student,
                 currentIndex: nextIndex,
                 timeLeft: student.schedule.times[nextIndex].duration * 60,
-                startTime: now,
               };
             } else {
               return { ...student, isRunning: false, isFinished: true };
             }
           }
-
-          return { ...student, timeLeft: student.timeLeft - elapsedSeconds, startTime: now };
         })
       );
     }, 1000);
@@ -129,6 +124,49 @@ export default function TeacherTimerApp() {
             <h4 className="font-bold">{schedule.name}</h4>
             <p className="text-sm whitespace-pre-line">{schedule.description}</p>
           </button>
+        ))}
+      </div>
+
+      {/* Active Students Section */}
+      <h3 className="text-lg font-semibold mt-6">Active Students</h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+        {students.map((student, index) => (
+          <div
+            key={index}
+            className={clsx(
+              "p-4 rounded shadow text-white relative",
+              student.isFinished
+                ? finishedColor
+                : student.schedule.times[student.currentIndex].label === "Work"
+                ? workColor
+                : breakColor
+            )}
+          >
+            <button
+              className="absolute top-2 right-2 text-white bg-red-600 p-1 rounded"
+              onClick={() => setStudents((prev) => prev.filter((_, i) => i !== index))}
+            >
+              ✖
+            </button>
+            <h3 className="text-lg font-semibold">{student.name}</h3>
+            <h4 className="text-md font-semibold">{student.scheduleName}</h4>
+            <p className="text-md">
+              {student.schedule.times[student.currentIndex].label}:{" "}
+              {Math.floor(student.timeLeft / 60)}m {student.timeLeft % 60}s
+            </p>
+            <div className="mt-2 bg-gray-300 h-2 rounded-lg">
+              <div
+                className="h-2 rounded-lg bg-white"
+                style={{
+                  width: `${
+                    (student.timeLeft /
+                      (student.schedule.times[student.currentIndex].duration * 60)) *
+                    100
+                  }%`,
+                }}
+              ></div>
+            </div>
+          </div>
         ))}
       </div>
     </div>
