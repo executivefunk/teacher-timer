@@ -19,38 +19,12 @@ const schedules = [
     ],
   },
   {
-    name: "Work a Little, Rest a Little",
-    description: "💡 30 min → Work time\n⏸️ 10 min → Break\n💡 30 min → Work time\n⏸️ 10 min → Break\n💡 30 min → Work time\n✅ 10 min → Break & plan next steps\n\nGreat for: Working in short bursts with more breaks!",
-    times: [
-      { label: "Work", duration: 30 },
-      { label: "Break", duration: 10 },
-      { label: "Work", duration: 30 },
-      { label: "Break", duration: 10 },
-      { label: "Work", duration: 30 },
-      { label: "Wrap Up", duration: 10 },
-    ],
-  },
-  {
     name: "Power Hour & Chill",
     description: "⚡ 60 min → Get in the zone!\n🌿 15 min → Break\n📝 35 min → Work again\n✅ 10 min → Break & plan next steps\n\nGreat for: Getting a lot done first, then taking a longer break!",
     times: [
       { label: "Work", duration: 60 },
       { label: "Break", duration: 15 },
       { label: "Work", duration: 35 },
-      { label: "Wrap Up", duration: 10 },
-    ],
-  },
-  {
-    name: "Short Work & Quick Breaks",
-    description: "💻 25 min → Work\n🔄 5 min → Break\n📖 25 min → Work\n🌟 10 min → Break\n🖊️ 25 min → Work\n🔄 5 min → Break\n🏁 15 min → Work\n✅ 10 min → Break & plan next steps\n\nGreat for: If you like to take lots of small breaks!",
-    times: [
-      { label: "Work", duration: 25 },
-      { label: "Break", duration: 5 },
-      { label: "Work", duration: 25 },
-      { label: "Break", duration: 10 },
-      { label: "Work", duration: 25 },
-      { label: "Break", duration: 5 },
-      { label: "Work", duration: 15 },
       { label: "Wrap Up", duration: 10 },
     ],
   },
@@ -70,6 +44,7 @@ export default function TeacherTimerApp() {
         scheduleName: schedule.name,
         currentIndex: 0,
         timeLeft: schedule.times[0].duration * 60,
+        startTime: Date.now(),
         isRunning: true,
         isFinished: false,
       },
@@ -81,22 +56,28 @@ export default function TeacherTimerApp() {
     const interval = setInterval(() => {
       setStudents((prev) =>
         prev.map((student) => {
-          if (student.isRunning && student.timeLeft > 0) {
-            return { ...student, timeLeft: student.timeLeft - 1 };
-          } else if (student.isRunning && student.timeLeft === 0) {
+          if (!student.isRunning) return student;
+
+          const now = Date.now();
+          const elapsedSeconds = Math.floor((now - student.startTime) / 1000);
+
+          if (elapsedSeconds >= student.timeLeft) {
             if (alertSound) alertSound.play();
             const nextIndex = student.currentIndex + 1;
+
             if (nextIndex < student.schedule.times.length) {
               return {
                 ...student,
                 currentIndex: nextIndex,
                 timeLeft: student.schedule.times[nextIndex].duration * 60,
+                startTime: now,
               };
             } else {
               return { ...student, isRunning: false, isFinished: true };
             }
           }
-          return student;
+
+          return { ...student, timeLeft: student.timeLeft - elapsedSeconds, startTime: now };
         })
       );
     }, 1000);
