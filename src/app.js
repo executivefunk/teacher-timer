@@ -10,6 +10,7 @@ const alertSound = typeof window !== "undefined" ? new Audio("/notification.mp3"
 const schedules = [
   {
     name: "Work Hard, Take a Break",
+    description: "🕐 0:00 - 0:50 → Get work done\n☕ 0:50 - 1:00 → Quick break\n🕐 1:00 - 1:50 → Get work done\n✅ 1:50 - 2:00 → Wrap up & plan next steps\n\nGreat for: Staying focused with just one break!",
     times: [
       { label: "Work", duration: 50 },
       { label: "Break", duration: 10 },
@@ -19,6 +20,7 @@ const schedules = [
   },
   {
     name: "Work a Little, Rest a Little",
+    description: "🕐 0:00 - 0:30 → Work time\n☕ 0:30 - 0:40 → Break\n🕐 0:40 - 1:10 → Work time\n☕ 1:10 - 1:20 → Break\n🕐 1:20 - 1:50 → Work time\n✅ 1:50 - 2:00 → Wrap up & plan next steps\n\nGreat for: Working in short bursts with more breaks!",
     times: [
       { label: "Work", duration: 30 },
       { label: "Break", duration: 10 },
@@ -30,6 +32,7 @@ const schedules = [
   },
   {
     name: "Power Hour & Chill",
+    description: "🕐 0:00 - 1:00 → Work, work, work!\n☕ 1:00 - 1:15 → Long break\n🕐 1:15 - 1:50 → Work again\n✅ 1:50 - 2:00 → Wrap up & plan next steps\n\nGreat for: Getting a lot done first, then taking a longer break!",
     times: [
       { label: "Work", duration: 60 },
       { label: "Break", duration: 15 },
@@ -39,6 +42,7 @@ const schedules = [
   },
   {
     name: "Short Work & Quick Breaks",
+    description: "🕐 0:00 - 0:25 → Work\n☕ 0:25 - 0:30 → Break\n🕐 0:30 - 0:55 → Work\n☕ 0:55 - 1:05 → Break\n🕐 1:05 - 1:30 → Work\n☕ 1:30 - 1:35 → Quick break\n🕐 1:35 - 1:50 → Work\n✅ 1:50 - 2:00 → Wrap up & plan next steps\n\nGreat for: If you like to take lots of small breaks!",
     times: [
       { label: "Work", duration: 25 },
       { label: "Break", duration: 5 },
@@ -57,58 +61,19 @@ export default function TeacherTimerApp() {
   const [studentName, setStudentName] = useState("");
   const [selectedSchedule, setSelectedSchedule] = useState(schedules[0]);
 
-  const addStudent = () => {
-    if (!studentName) return;
-    setStudents((prev) => [
-      ...prev,
-      {
-        name: studentName,
-        schedule: selectedSchedule,
-        scheduleName: selectedSchedule.name,
-        currentIndex: 0,
-        timeLeft: selectedSchedule.times[0].duration * 60,
-        isRunning: true,
-        isFinished: false,
-      },
-    ]);
-    setStudentName("");
-  };
-
-  const removeStudent = (index) => {
-    setStudents((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setStudents((prev) =>
-        prev.map((student) => {
-          if (student.isRunning && student.timeLeft > 0) {
-            return { ...student, timeLeft: student.timeLeft - 1 };
-          } else if (student.isRunning && student.timeLeft === 0) {
-            if (alertSound) alertSound.play();
-            const nextIndex = student.currentIndex + 1;
-            if (nextIndex < student.schedule.times.length) {
-              return {
-                ...student,
-                currentIndex: nextIndex,
-                timeLeft: student.schedule.times[nextIndex].duration * 60,
-              };
-            } else {
-              return { ...student, isRunning: false, isFinished: true };
-            }
-          }
-          return student;
-        })
-      );
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, []);
-
   return (
     <div className="p-4">
       <h2 className="text-xl font-bold">Teacher Dashboard</h2>
       <div className="mt-4">
+        <h3 className="text-lg font-semibold mb-2">Available Timer Schedules</h3>
+        <ul className="mb-4">
+          {schedules.map((schedule) => (
+            <li key={schedule.name} className="mb-2 p-2 border rounded bg-gray-100">
+              <h4 className="font-bold">{schedule.name}</h4>
+              <p className="text-sm whitespace-pre-line">{schedule.description}</p>
+            </li>
+          ))}
+        </ul>
         <input
           placeholder="Student Name"
           value={studentName}
@@ -128,55 +93,6 @@ export default function TeacherTimerApp() {
             </option>
           ))}
         </select>
-        <button
-          className="mt-2 bg-blue-500 text-white font-bold text-lg px-4 py-2 rounded hover:bg-blue-700 w-full"
-          onClick={addStudent}
-        >
-          Add Student
-        </button>
-      </div>
-      <h2 className="text-xl font-bold mt-6">Active Students</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-        {students.map((student, index) => (
-          <div
-            key={index}
-            className={clsx(
-              "p-4 rounded shadow text-white relative",
-              student.isFinished
-                ? finishedColor
-                : student.schedule.times[student.currentIndex].label === "Work"
-                ? workColor
-                : breakColor
-            )}
-          >
-            <button
-              className="absolute top-2 right-2 text-white bg-red-600 p-1 rounded"
-              onClick={() => removeStudent(index)}
-            >
-              ✖
-            </button>
-            <h3 className="text-lg font-semibold">{student.name}</h3>
-            <h4 className="text-md font-semibold">{student.scheduleName}</h4>
-            <p className="text-md">
-              {student.schedule.times[student.currentIndex].label}: {" "}
-              {Math.floor(student.timeLeft / 60)}m {student.timeLeft % 60}s
-            </p>
-            <div className="mt-2 bg-gray-300 h-2 rounded-lg">
-              <div
-                className="h-2 rounded-lg bg-white"
-                style={{
-                  width: `$
-                    {(
-                      (student.timeLeft /
-                        (student.schedule.times[student.currentIndex].duration *
-                          60)) *
-                      100
-                    )}%`,
-                }}
-              ></div>
-            </div>
-          </div>
-        ))}
       </div>
     </div>
   );
