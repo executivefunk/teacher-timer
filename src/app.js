@@ -1,10 +1,7 @@
 import { useState, useEffect } from "react";
-import { Button } from "./components/ui/button";
-import { Card, CardContent } from "./components/ui/card";
-import { Progress } from "./components/ui/progress";
-import { Input } from "./components/ui/input";
 import clsx from "clsx";
 
+// Tailwind color settings
 const workColor = "bg-green-500 text-white"; // Green for Work
 const breakColor = "bg-blue-500 text-white"; // Blue for Break
 const finishedColor = "bg-red-500 text-white"; // Red when Finished
@@ -56,7 +53,7 @@ const schedules = [
       { label: "Work", duration: 15 },
       { label: "Wrap Up", duration: 10 },
     ],
-  }
+  },
 ];
 
 export default function TeacherTimerApp() {
@@ -66,7 +63,15 @@ export default function TeacherTimerApp() {
   const addStudent = (name, schedule) => {
     setStudents((prev) => [
       ...prev,
-      { name, schedule, scheduleName: schedule.name, currentIndex: 0, timeLeft: schedule.times[0].duration * 60, isRunning: true, isFinished: false },
+      {
+        name,
+        schedule,
+        scheduleName: schedule.name,
+        currentIndex: 0,
+        timeLeft: schedule.times[0].duration * 60,
+        isRunning: true,
+        isFinished: false,
+      },
     ]);
   };
 
@@ -76,20 +81,26 @@ export default function TeacherTimerApp() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setStudents((prev) => prev.map((student) => {
-        if (student.isRunning && student.timeLeft > 0) {
-          return { ...student, timeLeft: student.timeLeft - 1 };
-        } else if (student.isRunning && student.timeLeft === 0) {
-          if (alertSound) alertSound.play();
-          const nextIndex = student.currentIndex + 1;
-          if (nextIndex < student.schedule.times.length) {
-            return { ...student, currentIndex: nextIndex, timeLeft: student.schedule.times[nextIndex].duration * 60 };
-          } else {
-            return { ...student, isRunning: false, isFinished: true };
+      setStudents((prev) =>
+        prev.map((student) => {
+          if (student.isRunning && student.timeLeft > 0) {
+            return { ...student, timeLeft: student.timeLeft - 1 };
+          } else if (student.isRunning && student.timeLeft === 0) {
+            if (alertSound) alertSound.play();
+            const nextIndex = student.currentIndex + 1;
+            if (nextIndex < student.schedule.times.length) {
+              return {
+                ...student,
+                currentIndex: nextIndex,
+                timeLeft: student.schedule.times[nextIndex].duration * 60,
+              };
+            } else {
+              return { ...student, isRunning: false, isFinished: true };
+            }
           }
-        }
-        return student;
-      }));
+          return student;
+        })
+      );
     }, 1000);
 
     return () => clearInterval(interval);
@@ -99,14 +110,14 @@ export default function TeacherTimerApp() {
     <div className="p-4">
       <h2 className="text-xl font-bold">Teacher Dashboard</h2>
       <div className="mt-4">
-        <Input
+        <input
           placeholder="Student Name"
           value={studentName}
           onChange={(e) => setStudentName(e.target.value)}
-          className="p-2 border rounded"
+          className="p-2 border rounded w-full"
         />
         <button
-          className="mt-2 bg-blue-500 text-white font-bold text-lg px-4 py-2 rounded hover:bg-blue-700"
+          className="mt-2 bg-blue-500 text-white font-bold text-lg px-4 py-2 rounded hover:bg-blue-700 w-full"
           onClick={() => {
             if (studentName) {
               addStudent(studentName, schedules[0]);
@@ -120,17 +131,38 @@ export default function TeacherTimerApp() {
       <h2 className="text-xl font-bold mt-6">Active Students</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
         {students.map((student, index) => (
-          <Card key={index} className={clsx("p-4 rounded shadow text-white", student.isFinished ? finishedColor : (student.schedule.times[student.currentIndex].label === "Work" ? workColor : breakColor))}>
-            <CardContent className="relative">
-              <button className="absolute top-2 right-2 text-white bg-red-600 p-1 rounded" onClick={() => removeStudent(index)}>✖</button>
-              <h3 className="text-lg font-semibold">{student.name}</h3>
-              <h4 className="text-md font-semibold">{student.scheduleName}</h4>
-              <p className="text-md">{student.schedule.times[student.currentIndex].label}: {Math.floor(student.timeLeft / 60)}m {student.timeLeft % 60}s</p>
-              <Progress value={(student.timeLeft / (student.schedule.times[student.currentIndex].duration * 60)) * 100} className="mt-2 bg-gray-300 h-2 rounded-lg" />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    </div>
-  );
-}
+          <div
+            key={index}
+            className={clsx(
+              "p-4 rounded shadow text-white relative",
+              student.isFinished
+                ? finishedColor
+                : student.schedule.times[student.currentIndex].label === "Work"
+                ? workColor
+                : breakColor
+            )}
+          >
+            <button
+              className="absolute top-2 right-2 text-white bg-red-600 p-1 rounded"
+              onClick={() => removeStudent(index)}
+            >
+              ✖
+            </button>
+            <h3 className="text-lg font-semibold">{student.name}</h3>
+            <h4 className="text-md font-semibold">{student.scheduleName}</h4>
+            <p className="text-md">
+              {student.schedule.times[student.currentIndex].label}:{" "}
+              {Math.floor(student.timeLeft / 60)}m {student.timeLeft % 60}s
+            </p>
+            <div className="mt-2 bg-gray-300 h-2 rounded-lg">
+              <div
+                className="h-2 rounded-lg bg-white"
+                style={{
+                  width: `${
+                    (student.timeLeft /
+                      (student.schedule.times[student.currentIndex].duration *
+                        60)) *
+                    100
+                  }%`,
+                }}
+        
