@@ -73,7 +73,11 @@ export default function TeacherTimerApp() {
       isFinished: false,
     };
     setStudents((prev) => [...prev, newStudent]);
-    setTimeout(() => setStudentName(""), 100); // Ensures UI updates correctly
+    setTimeout(() => setStudentName(""), 100);
+  };
+
+  const removeStudent = (index) => {
+    setStudents((prev) => prev.filter((_, i) => i !== index));
   };
 
   useEffect(() => {
@@ -135,8 +139,10 @@ export default function TeacherTimerApp() {
       <h3 className="text-lg font-semibold mt-6">Active Students</h3>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
         {students.map((student, index) => (
-          <div key={index} className="p-4 border rounded bg-gray-100">
+          <div key={index} className={clsx("p-4 border rounded relative", student.isFinished ? finishedColor : student.schedule.times[student.currentIndex].label === "Work" ? workColor : breakColor)}>
+            <button className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded" onClick={() => removeStudent(index)}>✖</button>
             <h4 className="font-bold">{student.name} - {student.scheduleName}</h4>
+            <p className="text-md">{Math.floor(student.timeLeft / 60)}m {student.timeLeft % 60}s remaining</p>
           </div>
         ))}
       </div>
