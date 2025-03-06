@@ -30,30 +30,6 @@ const schedules = [
       { label: "Wrap Up", duration: 10 },
     ],
   },
-  {
-    name: "Power Hour & Chill",
-    description: "🕐 60 min → Work\n☕ 15 min → Break\n🕐 35 min → Work\n✅ 10 min → Wrap up & plan next steps\n\nGreat for: Getting a lot done first, then taking a longer break!",
-    times: [
-      { label: "Work", duration: 60 },
-      { label: "Break", duration: 15 },
-      { label: "Work", duration: 35 },
-      { label: "Wrap Up", duration: 10 },
-    ],
-  },
-  {
-    name: "Short Work & Quick Breaks",
-    description: "🕐 25 min → Work\n☕ 5 min → Break\n🕐 25 min → Work\n☕ 10 min → Break\n🕐 25 min → Work\n☕ 5 min → Break\n🕐 15 min → Work\n✅ 10 min → Wrap up & plan next steps\n\nGreat for: If you like to take lots of small breaks!",
-    times: [
-      { label: "Work", duration: 25 },
-      { label: "Break", duration: 5 },
-      { label: "Work", duration: 25 },
-      { label: "Break", duration: 10 },
-      { label: "Work", duration: 25 },
-      { label: "Break", duration: 5 },
-      { label: "Work", duration: 15 },
-      { label: "Wrap Up", duration: 10 },
-    ],
-  },
 ];
 
 export default function TeacherTimerApp() {
@@ -165,4 +141,11 @@ export default function TeacherTimerApp() {
                     100
                   }%`,
                 }}
-        
+              ></div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
