@@ -77,6 +77,33 @@ export default function TeacherTimerApp() {
     setStudentName("");
   };
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setStudents((prev) =>
+        prev.map((student) => {
+          if (student.isRunning && student.timeLeft > 0) {
+            return { ...student, timeLeft: student.timeLeft - 1 };
+          } else if (student.isRunning && student.timeLeft === 0) {
+            if (alertSound) alertSound.play();
+            const nextIndex = student.currentIndex + 1;
+            if (nextIndex < student.schedule.times.length) {
+              return {
+                ...student,
+                currentIndex: nextIndex,
+                timeLeft: student.schedule.times[nextIndex].duration * 60,
+              };
+            } else {
+              return { ...student, isRunning: false, isFinished: true };
+            }
+          }
+          return student;
+        })
+      );
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <div className="p-4">
       <h2 className="text-xl font-bold">Teacher Dashboard</h2>
