@@ -62,19 +62,17 @@ export default function TeacherTimerApp() {
 
   const addStudent = (schedule) => {
     if (!studentName.trim()) return;
-    setStudents((prev) => [
-      ...prev,
-      {
-        name: studentName,
-        schedule: schedule,
-        scheduleName: schedule.name,
-        currentIndex: 0,
-        timeLeft: schedule.times[0].duration * 60,
-        startTime: Date.now(),
-        isRunning: true,
-        isFinished: false,
-      },
-    ]);
+    const newStudent = {
+      name: studentName,
+      schedule: schedule,
+      scheduleName: schedule.name,
+      currentIndex: 0,
+      timeLeft: schedule.times[0].duration * 60,
+      startTime: Date.now(),
+      isRunning: true,
+      isFinished: false,
+    };
+    setStudents((prev) => [...prev, newStudent]);
     setStudentName("");
   };
 
