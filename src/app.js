@@ -73,11 +73,11 @@ export default function TeacherTimerApp() {
       isFinished: false,
     };
     setStudents((prev) => [...prev, newStudent]);
-    setStudentName("");
+    setTimeout(() => setStudentName(""), 100); // Ensures UI updates correctly
   };
 
   useEffect(() => {
-    const interval = setInterval(() => {
+    const updateTimers = () => {
       setStudents((prev) =>
         prev.map((student) => {
           if (!student.isRunning) return student;
@@ -105,9 +105,24 @@ export default function TeacherTimerApp() {
           return { ...student, timeLeft: newTimeLeft, startTime: now };
         })
       );
-    }, 1000);
+    };
 
-    return () => clearInterval(interval);
+    // Update every second
+    const interval = setInterval(updateTimers, 1000);
+
+    // Ensure timers update correctly when returning to the tab
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        updateTimers();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, []);
 
   return (
