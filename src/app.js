@@ -77,16 +77,16 @@ export default function TeacherTimerApp() {
   };
 
   useEffect(() => {
-    const updateTimers = () => {
+    const interval = setInterval(() => {
       setStudents((prev) =>
         prev.map((student) => {
           if (!student.isRunning) return student;
 
           const now = Date.now();
           const elapsedSeconds = Math.floor((now - student.startTime) / 1000);
-          const newTimeLeft = student.timeLeft - elapsedSeconds;
+          const newTimeLeft = Math.max(student.timeLeft - elapsedSeconds, 0);
 
-          if (newTimeLeft <= 0) {
+          if (newTimeLeft === 0) {
             if (alertSound) alertSound.play();
             const nextIndex = student.currentIndex + 1;
 
@@ -105,24 +105,9 @@ export default function TeacherTimerApp() {
           return { ...student, timeLeft: newTimeLeft, startTime: now };
         })
       );
-    };
+    }, 1000);
 
-    // Update every second
-    const interval = setInterval(updateTimers, 1000);
-
-    // Ensure timers update correctly when returning to the tab
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        updateTimers();
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    return () => {
-      clearInterval(interval);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
+    return () => clearInterval(interval);
   }, []);
 
   return (
@@ -145,6 +130,14 @@ export default function TeacherTimerApp() {
             <h4 className="font-bold">{schedule.name}</h4>
             <p className="text-sm whitespace-pre-line">{schedule.description}</p>
           </button>
+        ))}
+      </div>
+      <h3 className="text-lg font-semibold mt-6">Active Students</h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+        {students.map((student, index) => (
+          <div key={index} className="p-4 border rounded bg-gray-100">
+            <h4 className="font-bold">{student.name} - {student.scheduleName}</h4>
+          </div>
         ))}
       </div>
     </div>
