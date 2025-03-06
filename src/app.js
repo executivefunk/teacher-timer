@@ -2,10 +2,10 @@ import { useState, useEffect } from "react";
 import clsx from "clsx";
 
 // Tailwind color settings
-const workColor = "bg-green-500 text-white"; // Green for Work
-const breakColor = "bg-blue-500 text-white"; // Blue for Break
-const finishedColor = "bg-red-500 text-white"; // Red when Finished
-const alertSound = typeof window !== "undefined" ? new Audio("/notification.mp3") : null; // Ensure compatibility with SSR
+const workColor = "bg-green-500 text-white";
+const breakColor = "bg-blue-500 text-white";
+const finishedColor = "bg-red-500 text-white";
+const alertSound = typeof window !== "undefined" ? new Audio("/notification.mp3") : null;
 
 const schedules = [
   {
@@ -59,18 +59,17 @@ const schedules = [
 export default function TeacherTimerApp() {
   const [students, setStudents] = useState([]);
   const [studentName, setStudentName] = useState("");
-  const [selectedSchedule, setSelectedSchedule] = useState(schedules[0]);
 
-  const addStudent = () => {
+  const addStudent = (schedule) => {
     if (!studentName) return;
     setStudents((prev) => [
       ...prev,
       {
         name: studentName,
-        schedule: selectedSchedule,
-        scheduleName: selectedSchedule.name,
+        schedule: schedule,
+        scheduleName: schedule.name,
         currentIndex: 0,
-        timeLeft: selectedSchedule.times[0].duration * 60,
+        timeLeft: schedule.times[0].duration * 60,
         isRunning: true,
         isFinished: false,
       },
@@ -81,41 +80,24 @@ export default function TeacherTimerApp() {
   return (
     <div className="p-4">
       <h2 className="text-xl font-bold">Teacher Dashboard</h2>
-      <div className="mt-4">
-        <h3 className="text-lg font-semibold mb-2">Available Timer Schedules</h3>
-        <ul className="mb-4">
-          {schedules.map((schedule) => (
-            <li key={schedule.name} className="mb-2 p-2 border rounded bg-gray-100">
-              <h4 className="font-bold">{schedule.name}</h4>
-              <p className="text-sm whitespace-pre-line">{schedule.description}</p>
-            </li>
-          ))}
-        </ul>
-        <input
-          placeholder="Student Name"
-          value={studentName}
-          onChange={(e) => setStudentName(e.target.value)}
-          className="p-2 border rounded w-full"
-        />
-        <select
-          className="mt-2 p-2 border rounded w-full"
-          value={selectedSchedule.name}
-          onChange={(e) =>
-            setSelectedSchedule(schedules.find((s) => s.name === e.target.value))
-          }
-        >
-          {schedules.map((schedule) => (
-            <option key={schedule.name} value={schedule.name}>
-              {schedule.name}
-            </option>
-          ))}
-        </select>
-        <button
-          className="mt-2 bg-blue-500 text-white font-bold text-lg px-4 py-2 rounded hover:bg-blue-700 w-full"
-          onClick={addStudent}
-        >
-          Add Student
-        </button>
+      <input
+        placeholder="Student Name"
+        value={studentName}
+        onChange={(e) => setStudentName(e.target.value)}
+        className="p-2 border rounded w-full mt-4"
+      />
+      <h3 className="text-lg font-semibold mt-4">Select a Timer Schedule</h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+        {schedules.map((schedule) => (
+          <button
+            key={schedule.name}
+            className="p-4 border rounded bg-gray-200 hover:bg-gray-300 w-full text-left"
+            onClick={() => addStudent(schedule)}
+          >
+            <h4 className="font-bold">{schedule.name}</h4>
+            <p className="text-sm whitespace-pre-line">{schedule.description}</p>
+          </button>
+        ))}
       </div>
     </div>
   );
