@@ -143,6 +143,9 @@ export default function TeacherTimerApp() {
             <button className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded" onClick={() => removeStudent(index)}>✖</button>
             <h4 className="font-bold">{student.name} - {student.scheduleName}</h4>
             <p className="text-md">{Math.floor(student.timeLeft / 60)}m {student.timeLeft % 60}s remaining</p>
+            <div className="mt-2 bg-gray-300 h-2 rounded-lg">
+              <div className="h-2 rounded-lg bg-white" style={{ width: `${(student.timeLeft / (student.schedule.times[student.currentIndex].duration * 60)) * 100}%` }}></div>
+            </div>
           </div>
         ))}
       </div>
