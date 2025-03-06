@@ -10,7 +10,7 @@ const alertSound = typeof window !== "undefined" ? new Audio("/notification.mp3"
 const schedules = [
   {
     name: "Work Hard, Take a Break",
-    description: "🕐 0:00 - 0:50 → Get work done\n☕ 0:50 - 1:00 → Quick break\n🕐 1:00 - 1:50 → Get work done\n✅ 1:50 - 2:00 → Wrap up & plan next steps\n\nGreat for: Staying focused with just one break!",
+    description: "📝 50 min → Get work done\n☕ 10 min → Break\n📝 50 min → Get work done\n✅ 10 min → Break & plan next steps\n\nGreat for: Staying focused with just one break!",
     times: [
       { label: "Work", duration: 50 },
       { label: "Break", duration: 10 },
@@ -20,7 +20,7 @@ const schedules = [
   },
   {
     name: "Work a Little, Rest a Little",
-    description: "🕐 0:00 - 0:30 → Work time\n☕ 0:30 - 0:40 → Break\n🕐 0:40 - 1:10 → Work time\n☕ 1:10 - 1:20 → Break\n🕐 1:20 - 1:50 → Work time\n✅ 1:50 - 2:00 → Wrap up & plan next steps\n\nGreat for: Working in short bursts with more breaks!",
+    description: "💡 30 min → Work time\n⏸️ 10 min → Break\n💡 30 min → Work time\n⏸️ 10 min → Break\n💡 30 min → Work time\n✅ 10 min → Break & plan next steps\n\nGreat for: Working in short bursts with more breaks!",
     times: [
       { label: "Work", duration: 30 },
       { label: "Break", duration: 10 },
@@ -32,7 +32,7 @@ const schedules = [
   },
   {
     name: "Power Hour & Chill",
-    description: "🕐 0:00 - 1:00 → Work, work, work!\n☕ 1:00 - 1:15 → Long break\n🕐 1:15 - 1:50 → Work again\n✅ 1:50 - 2:00 → Wrap up & plan next steps\n\nGreat for: Getting a lot done first, then taking a longer break!",
+    description: "⚡ 60 min → Get in the zone!\n🌿 15 min → Break\n📝 35 min → Work again\n✅ 10 min → Break & plan next steps\n\nGreat for: Getting a lot done first, then taking a longer break!",
     times: [
       { label: "Work", duration: 60 },
       { label: "Break", duration: 15 },
@@ -42,7 +42,7 @@ const schedules = [
   },
   {
     name: "Short Work & Quick Breaks",
-    description: "🕐 0:00 - 0:25 → Work\n☕ 0:25 - 0:30 → Break\n🕐 0:30 - 0:55 → Work\n☕ 0:55 - 1:05 → Break\n🕐 1:05 - 1:30 → Work\n☕ 1:30 - 1:35 → Quick break\n🕐 1:35 - 1:50 → Work\n✅ 1:50 - 2:00 → Wrap up & plan next steps\n\nGreat for: If you like to take lots of small breaks!",
+    description: "💻 25 min → Work\n🔄 5 min → Break\n📖 25 min → Work\n🌟 10 min → Break\n🖊️ 25 min → Work\n🔄 5 min → Break\n🏁 15 min → Work\n✅ 10 min → Break & plan next steps\n\nGreat for: If you like to take lots of small breaks!",
     times: [
       { label: "Work", duration: 25 },
       { label: "Break", duration: 5 },
