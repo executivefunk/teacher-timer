@@ -61,6 +61,23 @@ export default function TeacherTimerApp() {
   const [studentName, setStudentName] = useState("");
   const [selectedSchedule, setSelectedSchedule] = useState(schedules[0]);
 
+  const addStudent = () => {
+    if (!studentName) return;
+    setStudents((prev) => [
+      ...prev,
+      {
+        name: studentName,
+        schedule: selectedSchedule,
+        scheduleName: selectedSchedule.name,
+        currentIndex: 0,
+        timeLeft: selectedSchedule.times[0].duration * 60,
+        isRunning: true,
+        isFinished: false,
+      },
+    ]);
+    setStudentName("");
+  };
+
   return (
     <div className="p-4">
       <h2 className="text-xl font-bold">Teacher Dashboard</h2>
@@ -93,6 +110,12 @@ export default function TeacherTimerApp() {
             </option>
           ))}
         </select>
+        <button
+          className="mt-2 bg-blue-500 text-white font-bold text-lg px-4 py-2 rounded hover:bg-blue-700 w-full"
+          onClick={addStudent}
+        >
+          Add Student
+        </button>
       </div>
     </div>
   );
