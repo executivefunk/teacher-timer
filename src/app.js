@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import clsx from "clsx";
 
 // Tailwind color settings
@@ -59,6 +59,7 @@ const schedules = [
 export default function TeacherTimerApp() {
   const [students, setStudents] = useState([]);
   const [studentName, setStudentName] = useState("");
+  const animationFrameRef = useRef(null);
 
   const addStudent = (schedule) => {
     if (!studentName.trim()) return;
@@ -68,7 +69,7 @@ export default function TeacherTimerApp() {
       scheduleName: schedule.name,
       currentIndex: 0,
       timeLeft: schedule.times[0].duration * 60,
-      startTime: Date.now(),
+      lastUpdate: performance.now(),
       isRunning: true,
       isFinished: false,
     };
@@ -81,13 +82,13 @@ export default function TeacherTimerApp() {
   };
 
   useEffect(() => {
-    const interval = setInterval(() => {
+    const updateTimers = () => {
       setStudents((prev) =>
         prev.map((student) => {
           if (!student.isRunning) return student;
 
-          const now = Date.now();
-          const elapsedSeconds = Math.floor((now - student.startTime) / 1000);
+          const now = performance.now();
+          const elapsedSeconds = Math.floor((now - student.lastUpdate) / 1000);
           const newTimeLeft = Math.max(student.timeLeft - elapsedSeconds, 0);
 
           if (newTimeLeft === 0) {
@@ -99,19 +100,21 @@ export default function TeacherTimerApp() {
                 ...student,
                 currentIndex: nextIndex,
                 timeLeft: student.schedule.times[nextIndex].duration * 60,
-                startTime: now,
+                lastUpdate: now,
               };
             } else {
               return { ...student, isRunning: false, isFinished: true };
             }
           }
 
-          return { ...student, timeLeft: newTimeLeft, startTime: now };
+          return { ...student, timeLeft: newTimeLeft, lastUpdate: now };
         })
       );
-    }, 1000);
+      animationFrameRef.current = requestAnimationFrame(updateTimers);
+    };
 
-    return () => clearInterval(interval);
+    animationFrameRef.current = requestAnimationFrame(updateTimers);
+    return () => cancelAnimationFrame(animationFrameRef.current);
   }, []);
 
   return (
@@ -134,19 +137,6 @@ export default function TeacherTimerApp() {
             <h4 className="font-bold">{schedule.name}</h4>
             <p className="text-sm whitespace-pre-line">{schedule.description}</p>
           </button>
-        ))}
-      </div>
-      <h3 className="text-lg font-semibold mt-6">Active Students</h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-        {students.map((student, index) => (
-          <div key={index} className={clsx("p-4 border rounded relative", student.isFinished ? finishedColor : student.schedule.times[student.currentIndex].label === "Work" ? workColor : breakColor)}>
-            <button className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded" onClick={() => removeStudent(index)}>✖</button>
-            <h4 className="font-bold">{student.name} - {student.scheduleName}</h4>
-            <p className="text-md">{Math.floor(student.timeLeft / 60)}m {student.timeLeft % 60}s remaining</p>
-            <div className="mt-2 bg-gray-300 h-2 rounded-lg">
-              <div className="h-2 rounded-lg bg-white" style={{ width: `${(student.timeLeft / (student.schedule.times[student.currentIndex].duration * 60)) * 100}%` }}></div>
-            </div>
-          </div>
         ))}
       </div>
     </div>
