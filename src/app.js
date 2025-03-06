@@ -28,25 +28,50 @@ const schedules = [
       { label: "Wrap Up", duration: 10 },
     ],
   },
+  {
+    name: "Power Hour & Chill",
+    times: [
+      { label: "Work", duration: 60 },
+      { label: "Break", duration: 15 },
+      { label: "Work", duration: 35 },
+      { label: "Wrap Up", duration: 10 },
+    ],
+  },
+  {
+    name: "Short Work & Quick Breaks",
+    times: [
+      { label: "Work", duration: 25 },
+      { label: "Break", duration: 5 },
+      { label: "Work", duration: 25 },
+      { label: "Break", duration: 10 },
+      { label: "Work", duration: 25 },
+      { label: "Break", duration: 5 },
+      { label: "Work", duration: 15 },
+      { label: "Wrap Up", duration: 10 },
+    ],
+  },
 ];
 
 export default function TeacherTimerApp() {
   const [students, setStudents] = useState([]);
   const [studentName, setStudentName] = useState("");
+  const [selectedSchedule, setSelectedSchedule] = useState(schedules[0]);
 
-  const addStudent = (name, schedule) => {
+  const addStudent = () => {
+    if (!studentName) return;
     setStudents((prev) => [
       ...prev,
       {
-        name,
-        schedule,
-        scheduleName: schedule.name,
+        name: studentName,
+        schedule: selectedSchedule,
+        scheduleName: selectedSchedule.name,
         currentIndex: 0,
-        timeLeft: schedule.times[0].duration * 60,
+        timeLeft: selectedSchedule.times[0].duration * 60,
         isRunning: true,
         isFinished: false,
       },
     ]);
+    setStudentName("");
   };
 
   const removeStudent = (index) => {
@@ -90,14 +115,22 @@ export default function TeacherTimerApp() {
           onChange={(e) => setStudentName(e.target.value)}
           className="p-2 border rounded w-full"
         />
+        <select
+          className="mt-2 p-2 border rounded w-full"
+          value={selectedSchedule.name}
+          onChange={(e) =>
+            setSelectedSchedule(schedules.find((s) => s.name === e.target.value))
+          }
+        >
+          {schedules.map((schedule) => (
+            <option key={schedule.name} value={schedule.name}>
+              {schedule.name}
+            </option>
+          ))}
+        </select>
         <button
           className="mt-2 bg-blue-500 text-white font-bold text-lg px-4 py-2 rounded hover:bg-blue-700 w-full"
-          onClick={() => {
-            if (studentName) {
-              addStudent(studentName, schedules[0]);
-              setStudentName("");
-            }
-          }}
+          onClick={addStudent}
         >
           Add Student
         </button>
@@ -125,19 +158,20 @@ export default function TeacherTimerApp() {
             <h3 className="text-lg font-semibold">{student.name}</h3>
             <h4 className="text-md font-semibold">{student.scheduleName}</h4>
             <p className="text-md">
-              {student.schedule.times[student.currentIndex].label}:{" "}
+              {student.schedule.times[student.currentIndex].label}: {" "}
               {Math.floor(student.timeLeft / 60)}m {student.timeLeft % 60}s
             </p>
             <div className="mt-2 bg-gray-300 h-2 rounded-lg">
               <div
                 className="h-2 rounded-lg bg-white"
                 style={{
-                  width: `${
-                    (student.timeLeft /
-                      (student.schedule.times[student.currentIndex].duration *
-                        60)) *
-                    100
-                  }%`,
+                  width: `$
+                    {(
+                      (student.timeLeft /
+                        (student.schedule.times[student.currentIndex].duration *
+                          60)) *
+                      100
+                    )}%`,
                 }}
               ></div>
             </div>
