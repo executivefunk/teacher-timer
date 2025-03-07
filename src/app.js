@@ -63,19 +63,17 @@ export default function TeacherTimerApp() {
   const addStudent = (schedule) => {
     if (!studentName.trim()) return;
     const startTime = Date.now();
-    setStudents((prev) => [
-      ...prev,
-      {
-        name: studentName,
-        schedule: schedule,
-        scheduleName: schedule.name,
-        startTime: startTime,
-        currentIndex: 0,
-        isRunning: true,
-        isFinished: false,
-      },
-    ]);
-    setStudentName("");
+    const newStudent = {
+      name: studentName,
+      schedule: schedule,
+      scheduleName: schedule.name,
+      startTime: startTime,
+      currentIndex: 0,
+      isRunning: true,
+      isFinished: false,
+    };
+    setStudents((prev) => [...prev, newStudent]);
+    setTimeout(() => setStudentName(""), 50); // Ensure UI updates correctly
   };
 
   useEffect(() => {
