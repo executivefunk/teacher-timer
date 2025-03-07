@@ -63,18 +63,20 @@ export default function TeacherTimerApp() {
 
   const addStudent = (schedule) => {
     if (!studentName.trim()) return;
-    const newStudent = {
-      name: studentName,
-      schedule: schedule,
-      scheduleName: schedule.name,
-      currentIndex: 0,
-      timeLeft: schedule.times[0].duration * 60,
-      lastUpdate: performance.now(),
-      isRunning: true,
-      isFinished: false,
-    };
-    setStudents((prev) => [...prev, newStudent]);
-    setStudentName(""); // Ensure this runs only after state update
+    setStudents((prev) => [
+      ...prev,
+      {
+        name: studentName,
+        schedule: schedule,
+        scheduleName: schedule.name,
+        currentIndex: 0,
+        timeLeft: schedule.times[0].duration * 60,
+        lastUpdate: performance.now(),
+        isRunning: true,
+        isFinished: false,
+      },
+    ]);
+    setTimeout(() => setStudentName(""), 100); // Ensure state updates properly
   };
 
   useEffect(() => {
@@ -133,6 +135,14 @@ export default function TeacherTimerApp() {
             <h4 className="font-bold">{schedule.name}</h4>
             <p className="text-sm whitespace-pre-line">{schedule.description}</p>
           </button>
+        ))}
+      </div>
+      <h3 className="text-lg font-semibold mt-6">Active Students</h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+        {students.map((student, index) => (
+          <div key={index} className="p-4 border rounded bg-gray-100">
+            <h4 className="font-bold">{student.name} - {student.scheduleName}</h4>
+          </div>
         ))}
       </div>
     </div>
