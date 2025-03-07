@@ -58,14 +58,15 @@ const schedules = [
 
 export default function TeacherTimerApp() {
   const [students, setStudents] = useState([]);
+  const [studentName, setStudentName] = useState("");
   const animationFrameRef = useRef(null);
 
-  const addStudent = (name, schedule) => {
-    if (!name.trim()) return;
+  const addStudent = (schedule) => {
+    if (!studentName.trim()) return;
     setStudents((prev) => [
       ...prev,
       {
-        name,
+        name: studentName,
         schedule,
         scheduleName: schedule.name,
         currentIndex: 0,
@@ -75,6 +76,7 @@ export default function TeacherTimerApp() {
         isFinished: false,
       },
     ]);
+    setStudentName("");
   };
 
   useEffect(() => {
@@ -116,26 +118,23 @@ export default function TeacherTimerApp() {
   return (
     <div className="p-4">
       <h2 className="text-xl font-bold">Teacher Dashboard</h2>
+      <input
+        placeholder="Student Name"
+        value={studentName}
+        onChange={(e) => setStudentName(e.target.value)}
+        className="p-2 border rounded w-full mt-4"
+      />
       <h3 className="text-lg font-semibold mt-4">Select a Timer Schedule</h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
         {schedules.map((schedule) => (
           <button
             key={schedule.name}
             className="p-4 border rounded bg-gray-200 hover:bg-gray-300 w-full text-left"
-            onClick={() => addStudent(prompt("Enter Student Name:"), schedule)}
+            onClick={() => addStudent(schedule)}
           >
             <h4 className="font-bold">{schedule.name}</h4>
             <p className="text-sm whitespace-pre-line">{schedule.description}</p>
           </button>
-        ))}
-      </div>
-      <h3 className="text-lg font-semibold mt-6">Active Students</h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-        {students.map((student, index) => (
-          <div key={index} className={clsx("p-4 border rounded relative", student.isFinished ? finishedColor : student.schedule.times[student.currentIndex].label === "Work" ? workColor : breakColor)}>
-            <h4 className="font-bold">{student.name} - {student.scheduleName}</h4>
-            <p className="text-md">{Math.floor(student.timeLeft / 60)}m {student.timeLeft % 60}s remaining</p>
-          </div>
         ))}
       </div>
     </div>
