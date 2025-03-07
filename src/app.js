@@ -74,11 +74,7 @@ export default function TeacherTimerApp() {
       isFinished: false,
     };
     setStudents((prev) => [...prev, newStudent]);
-    setTimeout(() => setStudentName(""), 100);
-  };
-
-  const removeStudent = (index) => {
-    setStudents((prev) => prev.filter((_, i) => i !== index));
+    setStudentName(""); // Ensure this runs only after state update
   };
 
   useEffect(() => {
