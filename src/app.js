@@ -69,11 +69,12 @@ export default function TeacherTimerApp() {
       scheduleName: schedule.name,
       startTime: startTime,
       currentIndex: 0,
+      timeLeft: schedule.times[0].duration * 60,
       isRunning: true,
       isFinished: false,
     };
     setStudents((prev) => [...prev, newStudent]);
-    setTimeout(() => setStudentName(""), 50); // Ensure UI updates correctly
+    setStudentName("");
   };
 
   useEffect(() => {
@@ -91,7 +92,7 @@ export default function TeacherTimerApp() {
             totalElapsed -= timeLeft;
             currentIndex++;
             if (currentIndex >= student.schedule.times.length) {
-              return { ...student, isRunning: false, isFinished: true };
+              return { ...student, isRunning: false, isFinished: true, timeLeft: 0 };
             }
             timeLeft = student.schedule.times[currentIndex].duration * 60;
           }
@@ -128,6 +129,22 @@ export default function TeacherTimerApp() {
             <h4 className="font-bold">{schedule.name}</h4>
             <p className="text-sm whitespace-pre-line">{schedule.description}</p>
           </button>
+        ))}
+      </div>
+      <h3 className="text-lg font-semibold mt-6">Active Students</h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+        {students.map((student, index) => (
+          <div
+            key={index}
+            className={clsx(
+              "p-4 rounded shadow text-white relative",
+              student.isFinished ? finishedColor : student.schedule.times[student.currentIndex].label === "Work" ? workColor : breakColor
+            )}
+          >
+            <h3 className="text-lg font-semibold">{student.name}</h3>
+            <h4 className="text-md font-semibold">{student.scheduleName}</h4>
+            <p className="text-md">{student.schedule.times[student.currentIndex].label}: {Math.floor(student.timeLeft / 60)}m {student.timeLeft % 60}s</p>
+          </div>
         ))}
       </div>
     </div>
