@@ -61,7 +61,7 @@ export default function TeacherTimerApp() {
   const [studentName, setStudentName] = useState("");
 
   const addStudent = (schedule) => {
-    if (!studentName) return;
+    if (!studentName.trim()) return;
     const startTime = Date.now();
     setStudents((prev) => [
       ...prev,
