@@ -59,23 +59,6 @@ const schedules = [
 export default function TeacherTimerApp() {
   const [students, setStudents] = useState([]);
   const [studentName, setStudentName] = useState("");
-  const [deferredPrompt, setDeferredPrompt] = useState(null);
-
-  useEffect(() => {
-    window.addEventListener("beforeinstallprompt", (e) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    });
-  }, []);
-
-  const installPWA = () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      deferredPrompt.userChoice.then(() => {
-        setDeferredPrompt(null);
-      });
-    }
-  };
 
   const addStudent = (schedule) => {
     if (!studentName.trim()) return;
@@ -94,17 +77,45 @@ export default function TeacherTimerApp() {
     setStudentName("");
   };
 
+  const removeStudent = (index) => {
+    setStudents((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setStudents((prev) =>
+        prev.map((student) => {
+          if (!student.isRunning) return student;
+
+          const elapsedTime = Math.floor((Date.now() - student.startTime) / 1000);
+          let totalElapsed = elapsedTime;
+          let currentIndex = 0;
+          let timeLeft = student.schedule.times[currentIndex].duration * 60;
+
+          while (totalElapsed >= timeLeft) {
+            totalElapsed -= timeLeft;
+            currentIndex++;
+            if (currentIndex >= student.schedule.times.length) {
+              return { ...student, isRunning: false, isFinished: true, timeLeft: 0 };
+            }
+            timeLeft = student.schedule.times[currentIndex].duration * 60;
+          }
+
+          return {
+            ...student,
+            currentIndex,
+            timeLeft: timeLeft - totalElapsed,
+          };
+        })
+      );
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <div className="p-4">
       <h2 className="text-xl font-bold">Teacher Dashboard</h2>
-      {deferredPrompt && (
-        <button
-          onClick={installPWA}
-          className="bg-blue-500 text-white p-2 rounded mt-2"
-        >
-          📥 Install App
-        </button>
-      )}
       <input
         placeholder="Student Name"
         value={studentName}
@@ -122,6 +133,34 @@ export default function TeacherTimerApp() {
             <h4 className="font-bold">{schedule.name}</h4>
             <p className="text-sm whitespace-pre-line">{schedule.description}</p>
           </button>
+        ))}
+      </div>
+      <h3 className="text-lg font-semibold mt-6">Active Students</h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+        {students.map((student, index) => (
+          <div
+            key={index}
+            className={clsx(
+              "p-4 rounded shadow text-white relative",
+              student.isFinished ? finishedColor : student.schedule.times[student.currentIndex].label === "Work" ? workColor : breakColor
+            )}
+          >
+            <button
+              className="absolute top-2 right-2 text-white bg-red-600 p-1 rounded"
+              onClick={() => removeStudent(index)}
+            >
+              ✖
+            </button>
+            <h3 className="text-lg font-semibold">{student.name}</h3>
+            <h4 className="text-md font-semibold">{student.scheduleName}</h4>
+            <p className="text-md">{student.schedule.times[student.currentIndex].label}: {Math.floor(student.timeLeft / 60)}m {student.timeLeft % 60}s</p>
+            <div className="mt-2 bg-gray-300 h-2 rounded-lg">
+              <div
+                className="h-2 rounded-lg bg-white"
+                style={{ width: `${(student.timeLeft / (student.schedule.times[student.currentIndex].duration * 60)) * 100}%` }}
+              ></div>
+            </div>
+          </div>
         ))}
       </div>
     </div>
