@@ -154,6 +154,12 @@ export default function TeacherTimerApp() {
             <h3 className="text-lg font-semibold">{student.name}</h3>
             <h4 className="text-md font-semibold">{student.scheduleName}</h4>
             <p className="text-md">{student.schedule.times[student.currentIndex].label}: {Math.floor(student.timeLeft / 60)}m {student.timeLeft % 60}s</p>
+            <div className="mt-2 bg-gray-300 h-2 rounded-lg">
+              <div
+                className="h-2 rounded-lg bg-white"
+                style={{ width: `${(student.timeLeft / (student.schedule.times[student.currentIndex].duration * 60)) * 100}%` }}
+              ></div>
+            </div>
           </div>
         ))}
       </div>
