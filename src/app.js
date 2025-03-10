@@ -77,6 +77,10 @@ export default function TeacherTimerApp() {
     setStudentName("");
   };
 
+  const removeStudent = (index) => {
+    setStudents((prev) => prev.filter((_, i) => i !== index));
+  };
+
   useEffect(() => {
     const interval = setInterval(() => {
       setStudents((prev) =>
@@ -141,6 +145,12 @@ export default function TeacherTimerApp() {
               student.isFinished ? finishedColor : student.schedule.times[student.currentIndex].label === "Work" ? workColor : breakColor
             )}
           >
+            <button
+              className="absolute top-2 right-2 text-white bg-red-600 p-1 rounded"
+              onClick={() => removeStudent(index)}
+            >
+              ✖
+            </button>
             <h3 className="text-lg font-semibold">{student.name}</h3>
             <h4 className="text-md font-semibold">{student.scheduleName}</h4>
             <p className="text-md">{student.schedule.times[student.currentIndex].label}: {Math.floor(student.timeLeft / 60)}m {student.timeLeft % 60}s</p>
