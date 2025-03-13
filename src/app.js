@@ -5,6 +5,7 @@ import clsx from "clsx";
 const workColor = "bg-green-500 text-white";
 const breakColor = "bg-blue-500 text-white";
 const finishedColor = "bg-red-500 text-white";
+const pausedColor = "bg-orange-500 text-white";
 const alertSound = typeof window !== "undefined" ? new Audio("/notification.mp3") : null;
 
 const schedules = [
@@ -71,10 +72,19 @@ export default function TeacherTimerApp() {
       currentIndex: 0,
       timeLeft: schedule.times[0].duration * 60,
       isRunning: true,
+      isPaused: false,
       isFinished: false,
     };
     setStudents((prev) => [...prev, newStudent]);
     setStudentName("");
+  };
+
+  const togglePause = (index) => {
+    setStudents((prev) =>
+      prev.map((student, i) =>
+        i === index ? { ...student, isPaused: !student.isPaused } : student
+      )
+    );
   };
 
   const removeStudent = (index) => {
@@ -85,7 +95,7 @@ export default function TeacherTimerApp() {
     const interval = setInterval(() => {
       setStudents((prev) =>
         prev.map((student) => {
-          if (!student.isRunning) return student;
+          if (!student.isRunning || student.isPaused) return student;
 
           const elapsedTime = Math.floor((Date.now() - student.startTime) / 1000);
           let totalElapsed = elapsedTime;
@@ -142,7 +152,13 @@ export default function TeacherTimerApp() {
             key={index}
             className={clsx(
               "p-4 rounded shadow text-white relative",
-              student.isFinished ? finishedColor : student.schedule.times[student.currentIndex].label === "Work" ? workColor : breakColor
+              student.isPaused
+                ? pausedColor
+                : student.isFinished
+                ? finishedColor
+                : student.schedule.times[student.currentIndex].label === "Work"
+                ? workColor
+                : breakColor
             )}
           >
             <button
@@ -151,15 +167,14 @@ export default function TeacherTimerApp() {
             >
               ✖
             </button>
+            <button
+              className="absolute top-2 left-2 text-white bg-orange-600 p-1 rounded"
+              onClick={() => togglePause(index)}
+            >
+              {student.isPaused ? "▶ Resume" : "⏸ Pause"}
+            </button>
             <h3 className="text-lg font-semibold">{student.name}</h3>
             <h4 className="text-md font-semibold">{student.scheduleName}</h4>
-            <p className="text-md">{student.schedule.times[student.currentIndex].label}: {Math.floor(student.timeLeft / 60)}m {student.timeLeft % 60}s</p>
-            <div className="mt-2 bg-gray-300 h-2 rounded-lg">
-              <div
-                className="h-2 rounded-lg bg-white"
-                style={{ width: `${(student.timeLeft / (student.schedule.times[student.currentIndex].duration * 60)) * 100}%` }}
-              ></div>
-            </div>
           </div>
         ))}
       </div>
