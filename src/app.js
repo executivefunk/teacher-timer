@@ -152,27 +152,23 @@ export default function TeacherTimerApp() {
             key={index}
             className={clsx(
               "p-4 rounded shadow text-white relative",
-              student.isPaused
-                ? pausedColor
-                : student.isFinished
-                ? finishedColor
-                : student.schedule.times[student.currentIndex].label === "Work"
-                ? workColor
-                : breakColor
+              student.isPaused ? pausedColor : student.isFinished ? finishedColor : student.schedule.times[student.currentIndex].label === "Work" ? workColor : breakColor
             )}
           >
-            <button
-              className="absolute top-2 right-2 text-white bg-red-600 p-1 rounded"
-              onClick={() => removeStudent(index)}
-            >
-              ✖
-            </button>
-            <button
-              className="absolute top-2 left-2 text-white bg-orange-600 p-1 rounded"
-              onClick={() => togglePause(index)}
-            >
-              {student.isPaused ? "▶ Resume" : "⏸ Pause"}
-            </button>
+            <div className="absolute top-2 right-2 flex gap-2">
+              <button
+                className="text-white bg-orange-600 p-1 rounded"
+                onClick={() => togglePause(index)}
+              >
+                {student.isPaused ? "▶" : "⏸"}
+              </button>
+              <button
+                className="text-white bg-red-600 p-1 rounded"
+                onClick={() => removeStudent(index)}
+              >
+                ✖
+              </button>
+            </div>
             <h3 className="text-lg font-semibold">{student.name}</h3>
             <h4 className="text-md font-semibold">{student.scheduleName}</h4>
           </div>
