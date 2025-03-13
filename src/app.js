@@ -74,6 +74,7 @@ export default function TeacherTimerApp() {
       isRunning: true,
       isPaused: false,
       isFinished: false,
+      pausedTimeLeft: null,
     };
     setStudents((prev) => [...prev, newStudent]);
     setStudentName("");
@@ -82,7 +83,14 @@ export default function TeacherTimerApp() {
   const togglePause = (index) => {
     setStudents((prev) =>
       prev.map((student, i) =>
-        i === index ? { ...student, isPaused: !student.isPaused } : student
+        i === index
+          ? {
+              ...student,
+              isPaused: !student.isPaused,
+              pausedTimeLeft: student.isPaused ? null : student.timeLeft,
+              startTime: student.isPaused ? Date.now() - student.pausedTimeLeft * 1000 : student.startTime,
+            }
+          : student
       )
     );
   };
@@ -126,25 +134,6 @@ export default function TeacherTimerApp() {
   return (
     <div className="p-4">
       <h2 className="text-xl font-bold">Teacher Dashboard</h2>
-      <input
-        placeholder="Student Name"
-        value={studentName}
-        onChange={(e) => setStudentName(e.target.value)}
-        className="p-2 border rounded w-full mt-4"
-      />
-      <h3 className="text-lg font-semibold mt-4">Select a Timer Schedule</h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-        {schedules.map((schedule) => (
-          <button
-            key={schedule.name}
-            className="p-4 border rounded bg-gray-200 hover:bg-gray-300 w-full text-left"
-            onClick={() => addStudent(schedule)}
-          >
-            <h4 className="font-bold">{schedule.name}</h4>
-            <p className="text-sm whitespace-pre-line">{schedule.description}</p>
-          </button>
-        ))}
-      </div>
       <h3 className="text-lg font-semibold mt-6">Active Students</h3>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
         {students.map((student, index) => (
@@ -156,18 +145,10 @@ export default function TeacherTimerApp() {
             )}
           >
             <div className="absolute top-2 right-2 flex gap-2">
-              <button
-                className="text-white bg-orange-600 p-1 rounded"
-                onClick={() => togglePause(index)}
-              >
+              <button className="text-white bg-orange-600 p-1 rounded" onClick={() => togglePause(index)}>
                 {student.isPaused ? "▶" : "⏸"}
               </button>
-              <button
-                className="text-white bg-red-600 p-1 rounded"
-                onClick={() => removeStudent(index)}
-              >
-                ✖
-              </button>
+              <button className="text-white bg-red-600 p-1 rounded" onClick={() => removeStudent(index)}>✖</button>
             </div>
             <h3 className="text-lg font-semibold">{student.name}</h3>
             <h4 className="text-md font-semibold">{student.scheduleName}</h4>
