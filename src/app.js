@@ -74,7 +74,6 @@ export default function TeacherTimerApp() {
       isRunning: true,
       isPaused: false,
       isFinished: false,
-      pausedTimeLeft: null,
     };
     setStudents((prev) => [...prev, newStudent]);
     setStudentName("");
@@ -87,8 +86,7 @@ export default function TeacherTimerApp() {
           ? {
               ...student,
               isPaused: !student.isPaused,
-              pausedTimeLeft: student.isPaused ? null : student.timeLeft,
-              startTime: student.isPaused ? Date.now() - student.pausedTimeLeft * 1000 : student.startTime,
+              startTime: !student.isPaused ? Date.now() - student.timeLeft * 1000 : student.startTime,
             }
           : student
       )
