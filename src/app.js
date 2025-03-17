@@ -20,28 +20,6 @@ const schedules = [
     ],
   },
   {
-    name: "Work a Little, Rest a Little",
-    description: "💡 30 min → Work time\n⏸️ 10 min → Break\n💡 30 min → Work time\n⏸️ 10 min → Break\n💡 30 min → Work time\n✅ 10 min → Break & plan next steps\n\nGreat for: Working in short bursts with more breaks!",
-    times: [
-      { label: "Work", duration: 30 },
-      { label: "Break", duration: 10 },
-      { label: "Work", duration: 30 },
-      { label: "Break", duration: 10 },
-      { label: "Work", duration: 30 },
-      { label: "Wrap Up", duration: 10 },
-    ],
-  },
-  {
-    name: "Power Hour & Chill",
-    description: "⚡ 60 min → Get in the zone!\n🌿 15 min → Break\n📝 35 min → Work again\n✅ 10 min → Break & plan next steps\n\nGreat for: Getting a lot done first, then taking a longer break!",
-    times: [
-      { label: "Work", duration: 60 },
-      { label: "Break", duration: 15 },
-      { label: "Work", duration: 35 },
-      { label: "Wrap Up", duration: 10 },
-    ],
-  },
-  {
     name: "Short Work & Quick Breaks",
     description: "💻 25 min → Work\n🔄 5 min → Break\n📖 25 min → Work\n🌟 10 min → Break\n🖊️ 25 min → Work\n🔄 5 min → Break\n🏁 15 min → Work\n✅ 10 min → Break & plan next steps\n\nGreat for: If you like to take lots of small breaks!",
     times: [
@@ -54,7 +32,7 @@ const schedules = [
       { label: "Work", duration: 15 },
       { label: "Wrap Up", duration: 10 },
     ],
-  },
+  }
 ];
 
 export default function TeacherTimerApp() {
@@ -66,14 +44,15 @@ export default function TeacherTimerApp() {
     const startTime = Date.now();
     const newStudent = {
       name: studentName,
-      schedule: schedule,
+      schedule,
       scheduleName: schedule.name,
-      startTime: startTime,
+      startTime,
       currentIndex: 0,
       timeLeft: schedule.times[0].duration * 60,
       isRunning: true,
       isPaused: false,
       isFinished: false,
+      pausedTime: null,
     };
     setStudents((prev) => [...prev, newStudent]);
     setStudentName("");
@@ -82,20 +61,22 @@ export default function TeacherTimerApp() {
   const togglePause = (index) => {
     setStudents((prev) =>
       prev.map((student, i) => {
-        if (i !== index) return student; // Only modify the selected student
+        if (i !== index) return student;
 
         if (student.isPaused) {
-          // Resuming: Adjust startTime to ensure accurate elapsed time tracking
+          // Resume: Adjust the startTime correctly
           return {
             ...student,
             isPaused: false,
-            startTime: Date.now() - student.timeLeft * 1000,
+            startTime: Date.now() - (student.pausedTime || 0) * 1000,
+            pausedTime: null,
           };
         } else {
-          // Pausing: Just mark it as paused without altering timeLeft
+          // Pause: Store the remaining time correctly
           return {
             ...student,
             isPaused: true,
+            pausedTime: student.timeLeft,
           };
         }
       })
@@ -114,7 +95,7 @@ export default function TeacherTimerApp() {
 
           const elapsedTime = Math.floor((Date.now() - student.startTime) / 1000);
           let totalElapsed = elapsedTime;
-          let currentIndex = 0;
+          let currentIndex = student.currentIndex;
           let timeLeft = student.schedule.times[currentIndex].duration * 60;
 
           while (totalElapsed >= timeLeft) {
@@ -184,6 +165,16 @@ export default function TeacherTimerApp() {
             <p className="text-md">
               {student.schedule.times[student.currentIndex].label}: {Math.floor(student.timeLeft / 60)}m {student.timeLeft % 60}s
             </p>
+            <div className="mt-2 bg-gray-300 h-2 rounded-lg">
+              <div
+                className="h-2 rounded-lg bg-white"
+                style={{
+                  width: `${
+                    (student.timeLeft / (student.schedule.times[student.currentIndex].duration * 60)) * 100
+                  }%`,
+                }}
+              ></div>
+            </div>
           </div>
         ))}
       </div>
