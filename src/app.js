@@ -20,6 +20,28 @@ const schedules = [
     ],
   },
   {
+    name: "Work a Little, Rest a Little",
+    description: "💡 30 min → Work time\n⏸️ 10 min → Break\n💡 30 min → Work time\n⏸️ 10 min → Break\n💡 30 min → Work time\n✅ 10 min → Break & plan next steps\n\nGreat for: Working in short bursts with more breaks!",
+    times: [
+      { label: "Work", duration: 30 },
+      { label: "Break", duration: 10 },
+      { label: "Work", duration: 30 },
+      { label: "Break", duration: 10 },
+      { label: "Work", duration: 30 },
+      { label: "Wrap Up", duration: 10 },
+    ],
+  },
+  {
+    name: "Power Hour & Chill",
+    description: "⚡ 60 min → Get in the zone!\n🌿 15 min → Break\n📝 35 min → Work again\n✅ 10 min → Break & plan next steps\n\nGreat for: Getting a lot done first, then taking a longer break!",
+    times: [
+      { label: "Work", duration: 60 },
+      { label: "Break", duration: 15 },
+      { label: "Work", duration: 35 },
+      { label: "Wrap Up", duration: 10 },
+    ],
+  },
+  {
     name: "Short Work & Quick Breaks",
     description: "💻 25 min → Work\n🔄 5 min → Break\n📖 25 min → Work\n🌟 10 min → Break\n🖊️ 25 min → Work\n🔄 5 min → Break\n🏁 15 min → Work\n✅ 10 min → Break & plan next steps\n\nGreat for: If you like to take lots of small breaks!",
     times: [
@@ -41,18 +63,15 @@ export default function TeacherTimerApp() {
 
   const addStudent = (schedule) => {
     if (!studentName.trim()) return;
-    const startTime = Date.now();
     const newStudent = {
       name: studentName,
       schedule,
       scheduleName: schedule.name,
-      startTime,
       currentIndex: 0,
       timeLeft: schedule.times[0].duration * 60,
       isRunning: true,
       isPaused: false,
       isFinished: false,
-      pausedTime: null,
     };
     setStudents((prev) => [...prev, newStudent]);
     setStudentName("");
@@ -64,20 +83,9 @@ export default function TeacherTimerApp() {
         if (i !== index) return student;
 
         if (student.isPaused) {
-          // Resume: Adjust the startTime correctly
-          return {
-            ...student,
-            isPaused: false,
-            startTime: Date.now() - (student.pausedTime || 0) * 1000,
-            pausedTime: null,
-          };
+          return { ...student, isPaused: false };
         } else {
-          // Pause: Store the remaining time correctly
-          return {
-            ...student,
-            isPaused: true,
-            pausedTime: student.timeLeft,
-          };
+          return { ...student, isPaused: true };
         }
       })
     );
@@ -93,25 +101,20 @@ export default function TeacherTimerApp() {
         prev.map((student) => {
           if (!student.isRunning || student.isPaused) return student;
 
-          const elapsedTime = Math.floor((Date.now() - student.startTime) / 1000);
-          let totalElapsed = elapsedTime;
-          let currentIndex = student.currentIndex;
-          let timeLeft = student.schedule.times[currentIndex].duration * 60;
-
-          while (totalElapsed >= timeLeft) {
-            totalElapsed -= timeLeft;
-            currentIndex++;
-            if (currentIndex >= student.schedule.times.length) {
+          if (student.timeLeft > 0) {
+            return { ...student, timeLeft: student.timeLeft - 1 };
+          } else {
+            const nextIndex = student.currentIndex + 1;
+            if (nextIndex < student.schedule.times.length) {
+              return {
+                ...student,
+                currentIndex: nextIndex,
+                timeLeft: student.schedule.times[nextIndex].duration * 60,
+              };
+            } else {
               return { ...student, isRunning: false, isFinished: true, timeLeft: 0 };
             }
-            timeLeft = student.schedule.times[currentIndex].duration * 60;
           }
-
-          return {
-            ...student,
-            currentIndex,
-            timeLeft: timeLeft - totalElapsed,
-          };
         })
       );
     }, 1000);
@@ -165,16 +168,6 @@ export default function TeacherTimerApp() {
             <p className="text-md">
               {student.schedule.times[student.currentIndex].label}: {Math.floor(student.timeLeft / 60)}m {student.timeLeft % 60}s
             </p>
-            <div className="mt-2 bg-gray-300 h-2 rounded-lg">
-              <div
-                className="h-2 rounded-lg bg-white"
-                style={{
-                  width: `${
-                    (student.timeLeft / (student.schedule.times[student.currentIndex].duration * 60)) * 100
-                  }%`,
-                }}
-              ></div>
-            </div>
           </div>
         ))}
       </div>
