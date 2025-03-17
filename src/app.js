@@ -98,8 +98,6 @@ export default function TeacherTimerApp() {
   };
 
   useEffect(() => {
-    console.log("Active Students:", students); // Debug log
-
     const interval = setInterval(() => {
       setStudents((prev) =>
         prev.map((student) => {
@@ -129,7 +127,7 @@ export default function TeacherTimerApp() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [students]);
+  }, []);
 
   return (
     <div className="p-4">
@@ -161,15 +159,32 @@ export default function TeacherTimerApp() {
         {students.map((student, index) => (
           <div
             key={index}
-            className={`p-4 rounded shadow text-white relative ${
-              student.isPaused ? pausedColor : student.isFinished ? finishedColor : workColor
-            }`}
+            className={clsx(
+              "p-4 rounded shadow text-white relative",
+              student.isPaused ? pausedColor : student.isFinished ? finishedColor : student.schedule.times[student.currentIndex].label === "Work" ? workColor : breakColor
+            )}
           >
-            <button className="absolute top-2 right-2 bg-red-600 p-1 rounded" onClick={() => removeStudent(index)}>
-              ✖
-            </button>
+            <div className="absolute top-2 right-2 flex gap-2">
+              <button className="text-white bg-orange-600 p-1 rounded" onClick={() => togglePause(index)}>
+                {student.isPaused ? "▶" : "⏸"}
+              </button>
+              <button className="text-white bg-red-600 p-1 rounded" onClick={() => removeStudent(index)}>✖</button>
+            </div>
             <h3 className="text-lg font-semibold">{student.name}</h3>
             <h4 className="text-md font-semibold">{student.scheduleName}</h4>
+            <p className="text-md">
+              {student.schedule.times[student.currentIndex].label}: {Math.floor(student.timeLeft / 60)}m {student.timeLeft % 60}s
+            </p>
+            <div className="mt-2 bg-gray-300 h-2 rounded-lg">
+              <div
+                className="h-2 rounded-lg bg-white"
+                style={{
+                  width: `${
+                    (student.timeLeft / (student.schedule.times[student.currentIndex].duration * 60)) * 100
+                  }%`,
+                }}
+              ></div>
+            </div>
           </div>
         ))}
       </div>
