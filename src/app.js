@@ -81,15 +81,24 @@ export default function TeacherTimerApp() {
 
   const togglePause = (index) => {
     setStudents((prev) =>
-      prev.map((student, i) =>
-        i === index
-          ? {
-              ...student,
-              isPaused: !student.isPaused,
-              startTime: !student.isPaused ? Date.now() - student.timeLeft * 1000 : student.startTime,
-            }
-          : student
-      )
+      prev.map((student, i) => {
+        if (i !== index) return student; // Only modify the selected student
+
+        if (student.isPaused) {
+          // Resuming: Adjust startTime to ensure accurate elapsed time tracking
+          return {
+            ...student,
+            isPaused: false,
+            startTime: Date.now() - student.timeLeft * 1000,
+          };
+        } else {
+          // Pausing: Just mark it as paused without altering timeLeft
+          return {
+            ...student,
+            isPaused: true,
+          };
+        }
+      })
     );
   };
 
@@ -175,16 +184,6 @@ export default function TeacherTimerApp() {
             <p className="text-md">
               {student.schedule.times[student.currentIndex].label}: {Math.floor(student.timeLeft / 60)}m {student.timeLeft % 60}s
             </p>
-            <div className="mt-2 bg-gray-300 h-2 rounded-lg">
-              <div
-                className="h-2 rounded-lg bg-white"
-                style={{
-                  width: `${
-                    (student.timeLeft / (student.schedule.times[student.currentIndex].duration * 60)) * 100
-                  }%`,
-                }}
-              ></div>
-            </div>
           </div>
         ))}
       </div>
