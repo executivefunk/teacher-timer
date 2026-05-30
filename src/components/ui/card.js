@@ -1,9 +1,24 @@
 import React from "react";
+import clsx from "clsx";
 
-export function Card({ children }) {
-  return <div className="border p-4 rounded">{children}</div>;
+export function Card({ children, className, ...rest }) {
+  return (
+    <div
+      className={clsx(
+        "bg-white border border-gray-200 rounded-xl shadow-sm",
+        className
+      )}
+      {...rest}
+    >
+      {children}
+    </div>
+  );
 }
 
-export function CardContent({ children }) {
-  return <div className="p-2">{children}</div>;
+export function CardContent({ children, className, ...rest }) {
+  return (
+    <div className={clsx("p-4", className)} {...rest}>
+      {children}
+    </div>
+  );
 }
