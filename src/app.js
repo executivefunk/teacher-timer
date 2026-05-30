@@ -7,6 +7,10 @@ import { Input } from "./components/ui/input";
 const STORAGE_KEY = "teacher-timer-state-v2";
 const SETTINGS_KEY = "teacher-timer-settings-v2";
 const CUSTOM_KEY = "teacher-timer-custom-schedules-v2";
+const CLASS_KEY = "teacher-timer-class-v2";
+const LOG_KEY = "teacher-timer-activity-log-v2";
+
+const CLASS_ID = "__class__";
 
 const PHASE_LABELS = [
   "Work",
@@ -169,6 +173,32 @@ function loadCustomSchedules() {
   }
 }
 
+function loadClassTimer() {
+  try {
+    const raw = localStorage.getItem(CLASS_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function todayDateString() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function loadActivityLog() {
+  try {
+    const raw = localStorage.getItem(LOG_KEY);
+    if (!raw) return [];
+    const data = JSON.parse(raw);
+    if (!data || data.date !== todayDateString()) return [];
+    return Array.isArray(data.entries) ? data.entries : [];
+  } catch {
+    return [];
+  }
+}
+
 function formatTime(seconds) {
   const safe = Math.max(0, Math.floor(seconds));
   const m = Math.floor(safe / 60);
@@ -193,6 +223,27 @@ function customDescription(times) {
   const parts = times.map((t) => `${t.duration} min ${t.label}`);
   const total = times.reduce((a, t) => a + t.duration, 0);
   return `${parts.join(" • ")}\n\nTotal: ${total} min`;
+}
+
+function getInitials(name) {
+  const trimmed = (name || "").trim();
+  if (!trimmed) return "?";
+  const parts = trimmed.split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+// Stable hue from name — same student always gets the same avatar color.
+function avatarStyle(name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) {
+    h = ((h << 5) - h + name.charCodeAt(i)) | 0;
+  }
+  const hue = Math.abs(h) % 360;
+  return {
+    backgroundColor: `hsl(${hue}, 55%, 50%)`,
+    color: "white",
+  };
 }
 
 function phaseColor(label, isFinished) {
@@ -300,6 +351,8 @@ export default function TeacherTimerApp() {
   const [studentName, setStudentName] = useState("");
   const [settings, setSettings] = useState(loadSettings);
   const [customSchedules, setCustomSchedules] = useState(loadCustomSchedules);
+  const [classTimer, setClassTimer] = useState(loadClassTimer);
+  const [activityLog, setActivityLog] = useState(loadActivityLog);
   const [tick, setTick] = useState(0);
 
   // Builder state
@@ -310,8 +363,16 @@ export default function TeacherTimerApp() {
     { label: "Break", duration: 5 },
   ]);
 
-  // Focus mode
+  // Class timer UI state
+  const [showClassPicker, setShowClassPicker] = useState(false);
+
+  // Focus mode + view-all overview
   const [focusedId, setFocusedId] = useState(null);
+  const [viewAll, setViewAll] = useState(false);
+
+  // Undo toast + activity log expand
+  const [lastRemoved, setLastRemoved] = useState(null); // {student, index, ts}
+  const [showLog, setShowLog] = useState(false);
 
   const alertPlayerRef = useRef(null);
   const wakeLockRef = useRef(null);
@@ -341,6 +402,41 @@ export default function TeacherTimerApp() {
     } catch {}
   }, [customSchedules]);
 
+  useEffect(() => {
+    try {
+      if (classTimer) {
+        localStorage.setItem(CLASS_KEY, JSON.stringify(classTimer));
+      } else {
+        localStorage.removeItem(CLASS_KEY);
+      }
+    } catch {}
+  }, [classTimer]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        LOG_KEY,
+        JSON.stringify({ date: todayDateString(), entries: activityLog })
+      );
+    } catch {}
+  }, [activityLog]);
+
+  // Auto-clear log if the date rolls over mid-session (rare but possible)
+  useEffect(() => {
+    const check = () => {
+      try {
+        const raw = localStorage.getItem(LOG_KEY);
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        if (data?.date && data.date !== todayDateString()) {
+          setActivityLog([]);
+        }
+      } catch {}
+    };
+    const id = setInterval(check, 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+
   // Ticker
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 250);
@@ -349,8 +445,10 @@ export default function TeacherTimerApp() {
 
   // Wake Lock: keep iPad/phone screens awake while a timer is running
   const anyRunning = useMemo(
-    () => students.some((s) => s.isRunning && !s.isFinished),
-    [students]
+    () =>
+      students.some((s) => s.isRunning && !s.isFinished) ||
+      Boolean(classTimer && classTimer.isRunning && !classTimer.isFinished),
+    [students, classTimer]
   );
 
   useEffect(() => {
@@ -398,11 +496,12 @@ export default function TeacherTimerApp() {
     };
   }, [anyRunning]);
 
-  // Detect phase transitions, fire alerts, mark finished
+  // Detect phase transitions, fire alerts, mark finished, log completions
   useEffect(() => {
     const now = Date.now();
     const transitions = [];
-    const finishedIds = [];
+    const studentFinishedIds = [];
+    let classFinished = false;
 
     students.forEach((s) => {
       if (s.isFinished) {
@@ -414,19 +513,39 @@ export default function TeacherTimerApp() {
       const prevKey = prevPhaseRef.current[s.id];
 
       if (prevKey !== undefined && prevKey !== curKey) {
-        transitions.push({ student: s, state });
+        transitions.push({ target: s, state, kind: "student" });
       }
       prevPhaseRef.current[s.id] = curKey;
 
-      if (state.isFinished) finishedIds.push(s.id);
+      if (state.isFinished) studentFinishedIds.push(s.id);
     });
 
-    transitions.forEach(({ student, state }) => {
-      if (suppressAlertsRef.current.has(student.id)) return;
+    if (classTimer) {
+      if (classTimer.isFinished) {
+        prevPhaseRef.current[CLASS_ID] = "finished";
+      } else {
+        const state = getPhaseState(classTimer, now);
+        const curKey = state.isFinished
+          ? "finished"
+          : String(state.currentIndex);
+        const prevKey = prevPhaseRef.current[CLASS_ID];
+        if (prevKey !== undefined && prevKey !== curKey) {
+          transitions.push({ target: classTimer, state, kind: "class" });
+        }
+        prevPhaseRef.current[CLASS_ID] = curKey;
+        if (state.isFinished) classFinished = true;
+      }
+    } else {
+      delete prevPhaseRef.current[CLASS_ID];
+    }
+
+    transitions.forEach(({ target, state, kind }) => {
+      const id = kind === "class" ? CLASS_ID : target.id;
+      if (suppressAlertsRef.current.has(id)) return;
 
       const phaseName = state.isFinished
         ? "All done!"
-        : student.schedule.times[state.currentIndex].label;
+        : target.schedule.times[state.currentIndex].label;
 
       if (settings.soundEnabled && alertPlayerRef.current) {
         alertPlayerRef.current.play();
@@ -438,34 +557,62 @@ export default function TeacherTimerApp() {
         Notification.permission === "granted"
       ) {
         try {
-          new Notification(`${student.name}: ${phaseName}`, {
+          new Notification(`${target.name}: ${phaseName}`, {
             body: state.isFinished
-              ? `${student.scheduleName} complete.`
+              ? `${target.scheduleName} complete.`
               : `Now starting: ${phaseName}`,
-            tag: `student-${student.id}-${state.currentIndex}`,
+            tag: `${id}-${state.currentIndex}`,
           });
         } catch {}
       }
     });
 
-    // Clear suppress flags after each tick — they only apply once
     suppressAlertsRef.current.clear();
 
-    if (finishedIds.length > 0) {
+    if (studentFinishedIds.length > 0) {
       setStudents((prev) =>
         prev.map((s) =>
-          finishedIds.includes(s.id) && !s.isFinished
+          studentFinishedIds.includes(s.id) && !s.isFinished
             ? { ...s, isFinished: true, isRunning: false }
             : s
+        )
+      );
+      // Log natural completions
+      setActivityLog((prev) =>
+        prev.map((e) =>
+          studentFinishedIds.includes(e.timerId) && e.status === "active"
+            ? { ...e, status: "completed", endedAt: now }
+            : e
+        )
+      );
+    }
+    if (classFinished) {
+      setClassTimer((prev) =>
+        prev && !prev.isFinished
+          ? { ...prev, isFinished: true, isRunning: false }
+          : prev
+      );
+      setActivityLog((prev) =>
+        prev.map((e) =>
+          e.timerId === CLASS_ID && e.status === "active"
+            ? { ...e, status: "completed", endedAt: now }
+            : e
         )
       );
     }
 
     const liveIds = new Set(students.map((s) => s.id));
+    if (classTimer) liveIds.add(CLASS_ID);
     Object.keys(prevPhaseRef.current).forEach((id) => {
       if (!liveIds.has(id)) delete prevPhaseRef.current[id];
     });
-  }, [tick, students, settings.soundEnabled, settings.notificationsEnabled]);
+  }, [
+    tick,
+    students,
+    classTimer,
+    settings.soundEnabled,
+    settings.notificationsEnabled,
+  ]);
 
   // ---------- actions ----------
 
@@ -478,18 +625,33 @@ export default function TeacherTimerApp() {
       const trimmed = studentName.trim();
       if (!trimmed) return;
       unlock();
+      const id = uuid();
+      const startedAt = Date.now();
       setStudents((prev) => [
         ...prev,
         {
-          id: uuid(),
+          id,
           name: trimmed,
           schedule,
           scheduleName: schedule.name,
-          startTime: Date.now(),
+          startTime: startedAt,
           totalPausedMs: 0,
           pauseStartedAt: null,
           isRunning: true,
           isFinished: false,
+        },
+      ]);
+      setActivityLog((prev) => [
+        ...prev,
+        {
+          id: uuid(),
+          timerId: id,
+          kind: "student",
+          name: trimmed,
+          scheduleName: schedule.name,
+          startedAt,
+          endedAt: null,
+          status: "active",
         },
       ]);
       setStudentName("");
@@ -498,8 +660,50 @@ export default function TeacherTimerApp() {
   );
 
   const removeStudent = useCallback((id) => {
-    setStudents((prev) => prev.filter((s) => s.id !== id));
+    const now = Date.now();
+    setStudents((prev) => {
+      const idx = prev.findIndex((s) => s.id === id);
+      if (idx === -1) return prev;
+      const removed = prev[idx];
+      setLastRemoved({ student: removed, index: idx, ts: now });
+      return prev.filter((s) => s.id !== id);
+    });
+    // Mark active log entry as removed (only if still active)
+    setActivityLog((prev) =>
+      prev.map((e) =>
+        e.timerId === id && e.status === "active"
+          ? { ...e, status: "removed", endedAt: now }
+          : e
+      )
+    );
   }, []);
+
+  const undoRemove = useCallback(() => {
+    if (!lastRemoved) return;
+    const { student, index } = lastRemoved;
+    setStudents((prev) => {
+      if (prev.some((s) => s.id === student.id)) return prev;
+      const next = [...prev];
+      next.splice(Math.min(index, next.length), 0, student);
+      return next;
+    });
+    // Restore log entry to active if we can
+    setActivityLog((prev) =>
+      prev.map((e) =>
+        e.timerId === student.id && e.status === "removed"
+          ? { ...e, status: "active", endedAt: null }
+          : e
+      )
+    );
+    setLastRemoved(null);
+  }, [lastRemoved]);
+
+  // Auto-clear undo toast after 8 seconds
+  useEffect(() => {
+    if (!lastRemoved) return;
+    const id = setTimeout(() => setLastRemoved(null), 8000);
+    return () => clearTimeout(id);
+  }, [lastRemoved]);
 
   const togglePause = useCallback((id) => {
     setStudents((prev) =>
@@ -564,6 +768,185 @@ export default function TeacherTimerApp() {
       })
     );
   }, []);
+
+  // ---------- class timer actions ----------
+
+  const startClassTimer = useCallback(
+    (schedule) => {
+      unlock();
+      const startedAt = Date.now();
+      setClassTimer({
+        id: CLASS_ID,
+        name: "Whole Class",
+        schedule,
+        scheduleName: schedule.name,
+        startTime: startedAt,
+        totalPausedMs: 0,
+        pauseStartedAt: null,
+        isRunning: true,
+        isFinished: false,
+      });
+      setShowClassPicker(false);
+      setActivityLog((prev) => [
+        ...prev,
+        {
+          id: uuid(),
+          timerId: CLASS_ID,
+          kind: "class",
+          name: "Whole Class",
+          scheduleName: schedule.name,
+          startedAt,
+          endedAt: null,
+          status: "active",
+        },
+      ]);
+    },
+    [unlock]
+  );
+
+  const removeClassTimer = useCallback(() => {
+    if (!window.confirm("End the class-wide timer?")) return;
+    const now = Date.now();
+    setClassTimer(null);
+    setActivityLog((prev) =>
+      prev.map((e) =>
+        e.timerId === CLASS_ID && e.status === "active"
+          ? { ...e, status: "removed", endedAt: now }
+          : e
+      )
+    );
+  }, []);
+
+  const classTogglePause = useCallback(() => {
+    setClassTimer((prev) => {
+      if (!prev || prev.isFinished) return prev;
+      const now = Date.now();
+      if (prev.isRunning) {
+        return { ...prev, isRunning: false, pauseStartedAt: now };
+      }
+      const addedPaused = prev.pauseStartedAt ? now - prev.pauseStartedAt : 0;
+      return {
+        ...prev,
+        isRunning: true,
+        pauseStartedAt: null,
+        totalPausedMs: prev.totalPausedMs + addedPaused,
+      };
+    });
+  }, []);
+
+  const classReset = useCallback(() => {
+    setClassTimer((prev) =>
+      prev
+        ? {
+            ...prev,
+            startTime: Date.now(),
+            totalPausedMs: 0,
+            pauseStartedAt: null,
+            isRunning: true,
+            isFinished: false,
+          }
+        : prev
+    );
+    // Re-activate log entry if we were tracking it
+    setActivityLog((prev) =>
+      prev.map((e) =>
+        e.timerId === CLASS_ID && e.status !== "active"
+          ? { ...e, status: "active", endedAt: null }
+          : e
+      )
+    );
+  }, []);
+
+  const classAddTime = useCallback((minutes) => {
+    suppressAlertsRef.current.add(CLASS_ID);
+    setClassTimer((prev) =>
+      prev && !prev.isFinished
+        ? { ...prev, startTime: prev.startTime + minutes * 60 * 1000 }
+        : prev
+    );
+  }, []);
+
+  const classSkip = useCallback(() => {
+    suppressAlertsRef.current.add(CLASS_ID);
+    setClassTimer((prev) => {
+      if (!prev || prev.isFinished) return prev;
+      const state = getPhaseState(prev, Date.now());
+      if (state.isFinished) return prev;
+      return { ...prev, startTime: prev.startTime - state.timeLeft * 1000 };
+    });
+  }, []);
+
+  // ---------- activity log actions ----------
+
+  const buildLogSummary = useCallback(() => {
+    if (activityLog.length === 0) return "No activity logged today.";
+    const dateLabel = new Date().toLocaleDateString(undefined, {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+    const lines = [`Teacher Timer — ${dateLabel}`, ""];
+
+    let completed = 0;
+    let removed = 0;
+    let active = 0;
+    activityLog.forEach((e) => {
+      if (e.status === "completed") completed++;
+      else if (e.status === "removed") removed++;
+      else active++;
+
+      const start = formatClock(new Date(e.startedAt));
+      const endLabel =
+        e.status === "active"
+          ? "still active"
+          : `${e.status === "completed" ? "completed" : "removed"} at ${formatClock(new Date(e.endedAt))}`;
+      const minutes =
+        e.endedAt != null
+          ? Math.max(0, Math.round((e.endedAt - e.startedAt) / 60000))
+          : Math.max(0, Math.round((Date.now() - e.startedAt) / 60000));
+      const label = e.kind === "class" ? "[Class]" : "";
+      lines.push(
+        `${label ? label + " " : ""}${e.name} · ${e.scheduleName} · started ${start} · ${endLabel} (${minutes} min)`
+      );
+    });
+
+    lines.push("");
+    lines.push(
+      `Total: ${activityLog.length} timers · ${completed} completed · ${removed} removed early · ${active} still active`
+    );
+    return lines.join("\n");
+  }, [activityLog]);
+
+  const copyLogSummary = useCallback(async () => {
+    const text = buildLogSummary();
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        alert("Summary copied to clipboard.");
+        return;
+      }
+    } catch {}
+    // Fallback: temporary textarea
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      alert("Summary copied to clipboard.");
+    } catch {
+      window.prompt("Copy the text below:", text);
+    }
+  }, [buildLogSummary]);
+
+  const clearLog = useCallback(() => {
+    if (activityLog.length === 0) return;
+    if (window.confirm("Clear today's activity log?")) setActivityLog([]);
+  }, [activityLog.length]);
 
   const clearAll = useCallback(() => {
     if (students.length === 0) return;
@@ -719,8 +1102,78 @@ export default function TeacherTimerApp() {
                 ? "Notifications on"
                 : "Enable notifications"}
             </button>
+            {(students.length > 0 || classTimer) && (
+              <button
+                onClick={() => setViewAll(true)}
+                className="px-3 py-2 border border-gray-300 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800"
+                title="Full-screen view of all active timers"
+              >
+                View all ⛶
+              </button>
+            )}
           </div>
         </header>
+
+        {classTimer ? (
+          <ClassTimerCard
+            classTimer={classTimer}
+            now={now}
+            onRemove={removeClassTimer}
+            onTogglePause={classTogglePause}
+            onReset={classReset}
+            onAddTime={classAddTime}
+            onSkip={classSkip}
+          />
+        ) : (
+          <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6 mb-6">
+            {!showClassPicker ? (
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <h2 className="text-lg font-semibold">Whole-class timer</h2>
+                  <p className="text-sm text-gray-500">
+                    Run one timer the whole class can follow.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowClassPicker(true)}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold shrink-0"
+                >
+                  Start class timer
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-lg font-semibold">
+                    Pick a schedule for the whole class
+                  </h2>
+                  <button
+                    onClick={() => setShowClassPicker(false)}
+                    className="text-sm text-gray-500 hover:text-gray-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {allSchedules.map((schedule) => (
+                    <button
+                      key={schedule.id}
+                      onClick={() => startClassTimer(schedule)}
+                      className="p-4 border border-gray-300 rounded-lg w-full text-left bg-white hover:bg-blue-50 hover:border-blue-400 active:bg-blue-100 transition"
+                    >
+                      <h3 className="font-semibold text-gray-900">
+                        {schedule.name}
+                      </h3>
+                      <p className="text-sm text-gray-600 whitespace-pre-line mt-1">
+                        {schedule.description}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </section>
+        )}
 
         <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6 mb-6">
           <h2 className="text-lg font-semibold mb-3">Start a new timer</h2>
@@ -903,11 +1356,99 @@ export default function TeacherTimerApp() {
           </section>
         )}
 
-        {students.length === 0 && (
+        {students.length === 0 && !classTimer && (
           <p className="text-center text-gray-500 mt-8">
             No active timers. Enter a name and pick a schedule above to start.
           </p>
         )}
+
+        <section className="mt-8 bg-white rounded-xl border border-gray-200 shadow-sm">
+          <button
+            onClick={() => setShowLog((v) => !v)}
+            className="w-full flex items-center justify-between px-4 md:px-6 py-3 text-left"
+          >
+            <span className="font-semibold">
+              Today&apos;s activity ({activityLog.length})
+            </span>
+            <span className="text-gray-500 text-sm">{showLog ? "▲" : "▼"}</span>
+          </button>
+          {showLog && (
+            <div className="px-4 md:px-6 pb-4 border-t border-gray-200">
+              {activityLog.length === 0 ? (
+                <p className="text-sm text-gray-500 mt-3">
+                  Nothing logged yet today. Timers will appear here as you start
+                  them.
+                </p>
+              ) : (
+                <>
+                  <div className="overflow-x-auto mt-3">
+                    <table className="w-full text-sm">
+                      <thead className="text-xs text-gray-500 uppercase tracking-wide">
+                        <tr>
+                          <th className="text-left py-2 pr-3">Name</th>
+                          <th className="text-left py-2 pr-3">Schedule</th>
+                          <th className="text-left py-2 pr-3">Started</th>
+                          <th className="text-left py-2 pr-3">Ended</th>
+                          <th className="text-left py-2">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {activityLog.map((e) => (
+                          <tr key={e.id} className="border-t border-gray-100">
+                            <td className="py-2 pr-3 font-medium">
+                              {e.kind === "class" ? "👥 " : ""}
+                              {e.name}
+                            </td>
+                            <td className="py-2 pr-3 text-gray-600">
+                              {e.scheduleName}
+                            </td>
+                            <td className="py-2 pr-3 text-gray-600 tabular-nums">
+                              {formatClock(new Date(e.startedAt))}
+                            </td>
+                            <td className="py-2 pr-3 text-gray-600 tabular-nums">
+                              {e.endedAt
+                                ? formatClock(new Date(e.endedAt))
+                                : "—"}
+                            </td>
+                            <td className="py-2">
+                              <span
+                                className={clsx(
+                                  "inline-block px-2 py-0.5 rounded text-xs font-medium",
+                                  e.status === "completed" &&
+                                    "bg-emerald-100 text-emerald-700",
+                                  e.status === "removed" &&
+                                    "bg-gray-100 text-gray-700",
+                                  e.status === "active" &&
+                                    "bg-blue-100 text-blue-700"
+                                )}
+                              >
+                                {e.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="flex gap-2 mt-4 flex-wrap">
+                    <button
+                      onClick={copyLogSummary}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold"
+                    >
+                      Copy summary
+                    </button>
+                    <button
+                      onClick={clearLog}
+                      className="px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-semibold"
+                    >
+                      Clear log
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </section>
       </div>
 
       {focusedStudent && (
@@ -920,6 +1461,27 @@ export default function TeacherTimerApp() {
           onReset={resetStudent}
           onAddTime={addTime}
           onSkip={skipPhase}
+        />
+      )}
+
+      {viewAll && (
+        <ViewAllOverlay
+          students={students}
+          classTimer={classTimer}
+          now={now}
+          onClose={() => setViewAll(false)}
+          onTogglePause={togglePause}
+          onReset={resetStudent}
+          onClassTogglePause={classTogglePause}
+          onClassReset={classReset}
+        />
+      )}
+
+      {lastRemoved && (
+        <UndoToast
+          name={lastRemoved.student.name}
+          onUndo={undoRemove}
+          onDismiss={() => setLastRemoved(null)}
         />
       )}
     </div>
@@ -971,11 +1533,20 @@ function StudentCard({
       )}
     >
       <div className="flex items-start justify-between gap-2 mb-3">
-        <div className="min-w-0 flex-1">
-          <h3 className="text-xl md:text-2xl font-bold truncate">
-            {student.name}
-          </h3>
-          <p className="text-xs opacity-90 truncate">{student.scheduleName}</p>
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div
+            className="shrink-0 w-11 h-11 rounded-full flex items-center justify-center font-bold text-sm shadow-sm ring-2 ring-white/40"
+            style={avatarStyle(student.name)}
+            aria-hidden="true"
+          >
+            {getInitials(student.name)}
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="text-xl md:text-2xl font-bold truncate">
+              {student.name}
+            </h3>
+            <p className="text-xs opacity-90 truncate">{student.scheduleName}</p>
+          </div>
         </div>
         <div className="shrink-0 flex items-center gap-1">
           <button
@@ -1140,13 +1711,22 @@ function FocusOverlay({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 mb-4">
-          <div className="min-w-0 flex-1">
-            <h2 className="text-3xl md:text-5xl font-bold truncate">
-              {student.name}
-            </h2>
-            <p className="text-sm md:text-base opacity-90 truncate">
-              {student.scheduleName}
-            </p>
+          <div className="flex items-center gap-4 min-w-0 flex-1">
+            <div
+              className="shrink-0 w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center font-bold text-lg md:text-2xl shadow-md ring-4 ring-white/40"
+              style={avatarStyle(student.name)}
+              aria-hidden="true"
+            >
+              {getInitials(student.name)}
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-3xl md:text-5xl font-bold truncate">
+                {student.name}
+              </h2>
+              <p className="text-sm md:text-base opacity-90 truncate">
+                {student.scheduleName}
+              </p>
+            </div>
           </div>
           <button
             onClick={onClose}
@@ -1258,6 +1838,376 @@ function FocusOverlay({
           Remove this student
         </button>
       </div>
+    </div>
+  );
+}
+
+// ---------- class timer card ----------
+
+function ClassTimerCard({
+  classTimer,
+  now,
+  onRemove,
+  onTogglePause,
+  onReset,
+  onAddTime,
+  onSkip,
+}) {
+  const state = getPhaseState(classTimer, now);
+  const currentPhase = classTimer.schedule.times[state.currentIndex];
+  const phaseDurationSec = currentPhase.duration * 60;
+  const phasePercent =
+    phaseDurationSec > 0
+      ? ((phaseDurationSec - state.timeLeft) / phaseDurationSec) * 100
+      : 100;
+  const overallPercent =
+    state.totalDuration > 0
+      ? (state.totalElapsed / state.totalDuration) * 100
+      : 0;
+  const nextPhase =
+    !state.isFinished &&
+    state.currentIndex < classTimer.schedule.times.length - 1
+      ? classTimer.schedule.times[state.currentIndex + 1]
+      : null;
+  const phaseEndDate = new Date(now + state.timeLeft * 1000);
+  const scheduleEndDate = new Date(
+    now + (state.totalDuration - state.totalElapsed) * 1000
+  );
+
+  return (
+    <section
+      className={clsx(
+        "rounded-xl shadow-lg p-5 md:p-7 mb-6 relative",
+        phaseColor(currentPhase.label, state.isFinished),
+        !classTimer.isRunning &&
+          !state.isFinished &&
+          "ring-4 ring-yellow-300 ring-inset"
+      )}
+    >
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div
+            className="shrink-0 w-14 h-14 md:w-16 md:h-16 rounded-full bg-white/20 ring-2 ring-white/40 flex items-center justify-center text-3xl"
+            aria-hidden="true"
+          >
+            👥
+          </div>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-2xl md:text-3xl font-bold truncate">
+              Whole Class
+            </h2>
+            <p className="text-sm opacity-90 truncate">
+              {classTimer.scheduleName}
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={onRemove}
+          className="shrink-0 w-9 h-9 flex items-center justify-center bg-black/25 hover:bg-black/40 rounded-full text-xl leading-none font-bold"
+          aria-label="End class timer"
+          title="End class timer"
+        >
+          ×
+        </button>
+      </div>
+
+      {state.isFinished ? (
+        <div className="text-center py-6 md:py-8">
+          <div className="text-4xl md:text-5xl font-bold mb-1">All done!</div>
+          <div className="text-sm opacity-90">Class schedule complete</div>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-baseline justify-between mb-1">
+            <span className="text-sm md:text-base font-bold uppercase tracking-wide">
+              {currentPhase.label}
+              {!classTimer.isRunning && " (Paused)"}
+            </span>
+            <span className="text-xs opacity-80">
+              Phase {state.currentIndex + 1}/{classTimer.schedule.times.length}
+            </span>
+          </div>
+          <div className="text-6xl md:text-8xl font-mono font-bold text-center mb-3 tabular-nums">
+            {formatTime(state.timeLeft)}
+          </div>
+          <div className="bg-black/25 rounded-full h-3 mb-1 overflow-hidden">
+            <div
+              className="bg-white h-3 rounded-full transition-all duration-300"
+              style={{ width: `${phasePercent}%` }}
+            />
+          </div>
+          <div className="flex items-center justify-between text-xs md:text-sm opacity-90 mb-1">
+            <span>{Math.round(overallPercent)}% overall</span>
+            {nextPhase && (
+              <span>
+                Next: {nextPhase.label} ({nextPhase.duration}m)
+              </span>
+            )}
+          </div>
+          <div className="text-xs md:text-sm opacity-90 mb-4">
+            {classTimer.isRunning ? (
+              <>
+                Phase ends {formatClock(phaseEndDate)}
+                {" · "}Done {formatClock(scheduleEndDate)}
+              </>
+            ) : (
+              <>Paused — end times will resume when restarted</>
+            )}
+          </div>
+        </>
+      )}
+
+      {!state.isFinished && (
+        <div className="grid grid-cols-3 gap-2 mb-2">
+          <button
+            onClick={() => onAddTime(-5)}
+            className="py-3 bg-black/20 hover:bg-black/35 rounded-lg text-sm font-bold"
+          >
+            −5m
+          </button>
+          <button
+            onClick={() => onAddTime(5)}
+            className="py-3 bg-black/20 hover:bg-black/35 rounded-lg text-sm font-bold"
+          >
+            +5m
+          </button>
+          <button
+            onClick={onSkip}
+            className="py-3 bg-black/20 hover:bg-black/35 rounded-lg text-sm font-bold"
+          >
+            Skip ↪
+          </button>
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        {!state.isFinished && (
+          <button
+            onClick={onTogglePause}
+            className="flex-1 py-3 md:py-4 bg-black/25 hover:bg-black/40 rounded-lg text-sm md:text-base font-bold uppercase tracking-wide"
+          >
+            {classTimer.isRunning ? "Pause" : "Resume"}
+          </button>
+        )}
+        <button
+          onClick={onReset}
+          className="flex-1 py-3 md:py-4 bg-black/25 hover:bg-black/40 rounded-lg text-sm md:text-base font-bold uppercase tracking-wide"
+        >
+          Reset
+        </button>
+      </div>
+    </section>
+  );
+}
+
+// ---------- undo toast ----------
+
+function UndoToast({ name, onUndo, onDismiss }) {
+  return (
+    <div
+      className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-gray-900 text-white px-4 py-3 rounded-lg shadow-2xl flex items-center gap-3 max-w-[90vw]"
+      role="status"
+      aria-live="polite"
+    >
+      <span className="text-sm truncate">
+        Removed <span className="font-semibold">{name}</span>
+      </span>
+      <button
+        onClick={onUndo}
+        className="text-sm font-bold underline shrink-0 hover:text-blue-300"
+      >
+        Undo
+      </button>
+      <button
+        onClick={onDismiss}
+        className="shrink-0 w-7 h-7 flex items-center justify-center text-gray-400 hover:text-white rounded-full text-lg leading-none"
+        aria-label="Dismiss"
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
+// ---------- view-all overlay ----------
+
+function ViewAllOverlay({
+  students,
+  classTimer,
+  now,
+  onClose,
+  onTogglePause,
+  onReset,
+  onClassTogglePause,
+  onClassReset,
+}) {
+  // Close on Escape
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const cardCount =
+    students.length + (classTimer ? 1 : 0);
+  // Adaptive grid: 1/2/3/4 columns by card count
+  const gridCols =
+    cardCount <= 1
+      ? "grid-cols-1"
+      : cardCount <= 4
+        ? "grid-cols-1 md:grid-cols-2"
+        : cardCount <= 9
+          ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+          : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black text-white overflow-auto">
+      <div className="sticky top-0 z-10 bg-black/85 backdrop-blur px-4 md:px-6 py-3 flex items-center justify-between border-b border-white/10">
+        <div>
+          <h2 className="text-lg md:text-xl font-bold">All active timers</h2>
+          <p className="text-xs text-gray-400">
+            {cardCount === 0
+              ? "No active timers"
+              : `${cardCount} timer${cardCount === 1 ? "" : "s"}`}
+          </p>
+        </div>
+        <button
+          onClick={onClose}
+          className="px-4 py-2 bg-white text-gray-900 rounded-lg text-sm font-bold hover:bg-gray-100"
+          title="Back to dashboard (Esc)"
+        >
+          Exit ×
+        </button>
+      </div>
+
+      <div className="p-4 md:p-6">
+        {cardCount === 0 ? (
+          <div className="text-center mt-20 text-gray-400">
+            <p className="text-lg">No active timers right now.</p>
+            <button
+              onClick={onClose}
+              className="mt-4 px-4 py-2 bg-white text-gray-900 rounded-lg font-semibold"
+            >
+              Back to dashboard
+            </button>
+          </div>
+        ) : (
+          <div className={clsx("grid gap-4", gridCols)}>
+            {classTimer && (
+              <ViewAllTile
+                key={CLASS_ID}
+                timer={classTimer}
+                now={now}
+                isClass={true}
+                onTogglePause={onClassTogglePause}
+                onReset={onClassReset}
+              />
+            )}
+            {students.map((s) => (
+              <ViewAllTile
+                key={s.id}
+                timer={s}
+                now={now}
+                isClass={false}
+                onTogglePause={() => onTogglePause(s.id)}
+                onReset={() => onReset(s.id)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ViewAllTile({ timer, now, isClass, onTogglePause, onReset }) {
+  const state = getPhaseState(timer, now);
+  const currentPhase = timer.schedule.times[state.currentIndex];
+  const phaseDurationSec = currentPhase.duration * 60;
+  const phasePercent =
+    phaseDurationSec > 0
+      ? ((phaseDurationSec - state.timeLeft) / phaseDurationSec) * 100
+      : 100;
+  const scheduleEndDate = new Date(
+    now + (state.totalDuration - state.totalElapsed) * 1000
+  );
+
+  return (
+    <div
+      className={clsx(
+        "rounded-xl p-4 md:p-5 shadow-lg relative",
+        phaseColor(currentPhase.label, state.isFinished),
+        !timer.isRunning && !state.isFinished && "ring-4 ring-yellow-300 ring-inset"
+      )}
+    >
+      <div className="flex items-center gap-3 mb-3">
+        {isClass ? (
+          <div className="shrink-0 w-12 h-12 rounded-full bg-white/20 ring-2 ring-white/40 flex items-center justify-center text-2xl">
+            👥
+          </div>
+        ) : (
+          <div
+            className="shrink-0 w-12 h-12 rounded-full ring-2 ring-white/40 flex items-center justify-center font-bold"
+            style={avatarStyle(timer.name)}
+          >
+            {getInitials(timer.name)}
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <h3 className="text-lg md:text-xl font-bold truncate">
+            {timer.name}
+          </h3>
+          <p className="text-xs opacity-90 truncate">{timer.scheduleName}</p>
+        </div>
+      </div>
+
+      {state.isFinished ? (
+        <div className="text-center py-6">
+          <div className="text-3xl md:text-4xl font-bold">Done</div>
+        </div>
+      ) : (
+        <>
+          <div className="text-xs font-bold uppercase tracking-wider opacity-90 mb-1">
+            {currentPhase.label}
+            {!timer.isRunning && " (Paused)"}
+          </div>
+          <div className="text-5xl md:text-7xl font-mono font-bold text-center tabular-nums leading-none my-3">
+            {formatTime(state.timeLeft)}
+          </div>
+          <div className="bg-black/30 rounded-full h-2 overflow-hidden mb-2">
+            <div
+              className="bg-white h-2 rounded-full transition-all duration-300"
+              style={{ width: `${phasePercent}%` }}
+            />
+          </div>
+          <div className="text-xs opacity-90 mb-3">
+            {timer.isRunning ? (
+              <>Done at {formatClock(scheduleEndDate)}</>
+            ) : (
+              <>Paused</>
+            )}
+          </div>
+        </>
+      )}
+
+      {!state.isFinished && (
+        <div className="flex gap-2">
+          <button
+            onClick={onTogglePause}
+            className="flex-1 py-2.5 bg-black/30 hover:bg-black/50 rounded-lg text-sm font-bold uppercase"
+          >
+            {timer.isRunning ? "Pause" : "Resume"}
+          </button>
+          <button
+            onClick={onReset}
+            className="flex-1 py-2.5 bg-black/30 hover:bg-black/50 rounded-lg text-sm font-bold uppercase"
+          >
+            Reset
+          </button>
+        </div>
+      )}
     </div>
   );
 }
