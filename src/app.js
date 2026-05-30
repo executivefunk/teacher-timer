@@ -7,17 +7,25 @@ import { Input } from "./components/ui/input";
 const STORAGE_KEY = "teacher-timer-state-v2";
 const SETTINGS_KEY = "teacher-timer-settings-v2";
 const CUSTOM_KEY = "teacher-timer-custom-schedules-v2";
-const CLASS_KEY = "teacher-timer-class-v2";
 const LOG_KEY = "teacher-timer-activity-log-v2";
-
-const CLASS_ID = "__class__";
 
 const PHASE_LABELS = [
   "Work",
+  "Work Together",
   "Break",
   "Review & Practice",
   "Review & Next Steps",
+  "Review, Questions & Next Steps",
 ];
+
+const PHASE_EMOJI = {
+  Work: "📝",
+  "Work Together": "🤝",
+  Break: "🔄",
+  "Review & Practice": "🎯",
+  "Review & Next Steps": "✅",
+  "Review, Questions & Next Steps": "❓",
+};
 
 // ---------- preset schedules ----------
 
@@ -91,6 +99,20 @@ const presets = [
       { label: "Break", duration: 5 },
       { label: "Work", duration: 25 },
       { label: "Review & Next Steps", duration: 5 },
+    ],
+  },
+  {
+    id: "preset-partner",
+    name: "Partner Mode",
+    description:
+      "🤝 30 min → Work Together\n🔄 5 min → Break\n🤝 30 min → Work Together\n🔄 5 min → Break\n🤝 30 min → Work Together\n❓ 20 min → Review, Questions & Next Steps\n\nFor two or more students. Tip: enter names like \"Maya & Jamal\".",
+    times: [
+      { label: "Work Together", duration: 30 },
+      { label: "Break", duration: 5 },
+      { label: "Work Together", duration: 30 },
+      { label: "Break", duration: 5 },
+      { label: "Work Together", duration: 30 },
+      { label: "Review, Questions & Next Steps", duration: 20 },
     ],
   },
 ];
@@ -173,16 +195,6 @@ function loadCustomSchedules() {
   }
 }
 
-function loadClassTimer() {
-  try {
-    const raw = localStorage.getItem(CLASS_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
-
 function todayDateString() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -220,14 +232,29 @@ function formatClock(date) {
 }
 
 function customDescription(times) {
-  const parts = times.map((t) => `${t.duration} min ${t.label}`);
+  const lines = times.map(
+    (t) => `${PHASE_EMOJI[t.label] || "•"} ${t.duration} min → ${t.label}`
+  );
   const total = times.reduce((a, t) => a + t.duration, 0);
-  return `${parts.join(" • ")}\n\nTotal: ${total} min`;
+  return `${lines.join("\n")}\n\nTotal: ${total} min`;
 }
 
 function getInitials(name) {
   const trimmed = (name || "").trim();
   if (!trimmed) return "?";
+  // Multi-person names: "Maya & Jamal", "Maya, Jamal, Sam"
+  if (/[&,]/.test(trimmed)) {
+    const names = trimmed
+      .split(/[&,]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (names.length >= 2) {
+      return names
+        .slice(0, 3)
+        .map((n) => n[0].toUpperCase())
+        .join("");
+    }
+  }
   const parts = trimmed.split(/\s+/);
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
@@ -251,12 +278,16 @@ function phaseColor(label, isFinished) {
   switch (label) {
     case "Work":
       return "bg-emerald-600 text-white";
+    case "Work Together":
+      return "bg-teal-600 text-white";
     case "Break":
       return "bg-sky-600 text-white";
     case "Review & Practice":
       return "bg-violet-600 text-white";
     case "Review & Next Steps":
       return "bg-amber-500 text-white";
+    case "Review, Questions & Next Steps":
+      return "bg-amber-600 text-white";
     default:
       return "bg-slate-600 text-white";
   }
@@ -351,7 +382,6 @@ export default function TeacherTimerApp() {
   const [studentName, setStudentName] = useState("");
   const [settings, setSettings] = useState(loadSettings);
   const [customSchedules, setCustomSchedules] = useState(loadCustomSchedules);
-  const [classTimer, setClassTimer] = useState(loadClassTimer);
   const [activityLog, setActivityLog] = useState(loadActivityLog);
   const [tick, setTick] = useState(0);
 
@@ -363,9 +393,6 @@ export default function TeacherTimerApp() {
     { label: "Break", duration: 5 },
   ]);
 
-  // Class timer UI state
-  const [showClassPicker, setShowClassPicker] = useState(false);
-
   // Focus mode + view-all overview
   const [focusedId, setFocusedId] = useState(null);
   const [viewAll, setViewAll] = useState(false);
@@ -373,6 +400,9 @@ export default function TeacherTimerApp() {
   // Undo toast + activity log expand
   const [lastRemoved, setLastRemoved] = useState(null); // {student, index, ts}
   const [showLog, setShowLog] = useState(false);
+
+  // Acknowledgment popups (require explicit dismissal)
+  const [acknowledgments, setAcknowledgments] = useState([]);
 
   const alertPlayerRef = useRef(null);
   const wakeLockRef = useRef(null);
@@ -401,16 +431,6 @@ export default function TeacherTimerApp() {
       localStorage.setItem(CUSTOM_KEY, JSON.stringify(customSchedules));
     } catch {}
   }, [customSchedules]);
-
-  useEffect(() => {
-    try {
-      if (classTimer) {
-        localStorage.setItem(CLASS_KEY, JSON.stringify(classTimer));
-      } else {
-        localStorage.removeItem(CLASS_KEY);
-      }
-    } catch {}
-  }, [classTimer]);
 
   useEffect(() => {
     try {
@@ -445,10 +465,8 @@ export default function TeacherTimerApp() {
 
   // Wake Lock: keep iPad/phone screens awake while a timer is running
   const anyRunning = useMemo(
-    () =>
-      students.some((s) => s.isRunning && !s.isFinished) ||
-      Boolean(classTimer && classTimer.isRunning && !classTimer.isFinished),
-    [students, classTimer]
+    () => students.some((s) => s.isRunning && !s.isFinished),
+    [students]
   );
 
   useEffect(() => {
@@ -501,7 +519,6 @@ export default function TeacherTimerApp() {
     const now = Date.now();
     const transitions = [];
     const studentFinishedIds = [];
-    let classFinished = false;
 
     students.forEach((s) => {
       if (s.isFinished) {
@@ -513,35 +530,15 @@ export default function TeacherTimerApp() {
       const prevKey = prevPhaseRef.current[s.id];
 
       if (prevKey !== undefined && prevKey !== curKey) {
-        transitions.push({ target: s, state, kind: "student" });
+        transitions.push({ target: s, state });
       }
       prevPhaseRef.current[s.id] = curKey;
 
       if (state.isFinished) studentFinishedIds.push(s.id);
     });
 
-    if (classTimer) {
-      if (classTimer.isFinished) {
-        prevPhaseRef.current[CLASS_ID] = "finished";
-      } else {
-        const state = getPhaseState(classTimer, now);
-        const curKey = state.isFinished
-          ? "finished"
-          : String(state.currentIndex);
-        const prevKey = prevPhaseRef.current[CLASS_ID];
-        if (prevKey !== undefined && prevKey !== curKey) {
-          transitions.push({ target: classTimer, state, kind: "class" });
-        }
-        prevPhaseRef.current[CLASS_ID] = curKey;
-        if (state.isFinished) classFinished = true;
-      }
-    } else {
-      delete prevPhaseRef.current[CLASS_ID];
-    }
-
-    transitions.forEach(({ target, state, kind }) => {
-      const id = kind === "class" ? CLASS_ID : target.id;
-      if (suppressAlertsRef.current.has(id)) return;
+    transitions.forEach(({ target, state }) => {
+      if (suppressAlertsRef.current.has(target.id)) return;
 
       const phaseName = state.isFinished
         ? "All done!"
@@ -550,6 +547,23 @@ export default function TeacherTimerApp() {
       if (settings.soundEnabled && alertPlayerRef.current) {
         alertPlayerRef.current.play();
       }
+
+      // In-app acknowledgment popup (requires explicit dismissal)
+      setAcknowledgments((prev) => [
+        ...prev,
+        {
+          id: uuid(),
+          studentId: target.id,
+          studentName: target.name,
+          scheduleName: target.scheduleName,
+          phaseName,
+          isFinished: state.isFinished,
+          ts: now,
+        },
+      ]);
+
+      // OS-level notification (cross-window). Stays until clicked thanks to
+      // requireInteraction. Clicking it focuses our tab.
       if (
         settings.notificationsEnabled &&
         typeof window !== "undefined" &&
@@ -557,12 +571,19 @@ export default function TeacherTimerApp() {
         Notification.permission === "granted"
       ) {
         try {
-          new Notification(`${target.name}: ${phaseName}`, {
+          const notif = new Notification(`${target.name}: ${phaseName}`, {
             body: state.isFinished
               ? `${target.scheduleName} complete.`
               : `Now starting: ${phaseName}`,
-            tag: `${id}-${state.currentIndex}`,
+            tag: `${target.id}-${state.currentIndex}`,
+            requireInteraction: true,
           });
+          notif.onclick = () => {
+            try {
+              window.focus();
+            } catch {}
+            notif.close();
+          };
         } catch {}
       }
     });
@@ -586,30 +607,14 @@ export default function TeacherTimerApp() {
         )
       );
     }
-    if (classFinished) {
-      setClassTimer((prev) =>
-        prev && !prev.isFinished
-          ? { ...prev, isFinished: true, isRunning: false }
-          : prev
-      );
-      setActivityLog((prev) =>
-        prev.map((e) =>
-          e.timerId === CLASS_ID && e.status === "active"
-            ? { ...e, status: "completed", endedAt: now }
-            : e
-        )
-      );
-    }
 
     const liveIds = new Set(students.map((s) => s.id));
-    if (classTimer) liveIds.add(CLASS_ID);
     Object.keys(prevPhaseRef.current).forEach((id) => {
       if (!liveIds.has(id)) delete prevPhaseRef.current[id];
     });
   }, [
     tick,
     students,
-    classTimer,
     settings.soundEnabled,
     settings.notificationsEnabled,
   ]);
@@ -705,6 +710,19 @@ export default function TeacherTimerApp() {
     return () => clearTimeout(id);
   }, [lastRemoved]);
 
+  // Tab title flash: cross-window indicator of pending acknowledgments
+  useEffect(() => {
+    const baseTitle = "Teacher Timer";
+    if (acknowledgments.length > 0) {
+      document.title = `(${acknowledgments.length}) ${baseTitle} — alert${acknowledgments.length > 1 ? "s" : ""}`;
+    } else {
+      document.title = baseTitle;
+    }
+    return () => {
+      document.title = baseTitle;
+    };
+  }, [acknowledgments.length]);
+
   const togglePause = useCallback((id) => {
     setStudents((prev) =>
       prev.map((s) => {
@@ -767,113 +785,6 @@ export default function TeacherTimerApp() {
         return { ...s, startTime: s.startTime - state.timeLeft * 1000 };
       })
     );
-  }, []);
-
-  // ---------- class timer actions ----------
-
-  const startClassTimer = useCallback(
-    (schedule) => {
-      unlock();
-      const startedAt = Date.now();
-      setClassTimer({
-        id: CLASS_ID,
-        name: "Whole Class",
-        schedule,
-        scheduleName: schedule.name,
-        startTime: startedAt,
-        totalPausedMs: 0,
-        pauseStartedAt: null,
-        isRunning: true,
-        isFinished: false,
-      });
-      setShowClassPicker(false);
-      setActivityLog((prev) => [
-        ...prev,
-        {
-          id: uuid(),
-          timerId: CLASS_ID,
-          kind: "class",
-          name: "Whole Class",
-          scheduleName: schedule.name,
-          startedAt,
-          endedAt: null,
-          status: "active",
-        },
-      ]);
-    },
-    [unlock]
-  );
-
-  const removeClassTimer = useCallback(() => {
-    if (!window.confirm("End the class-wide timer?")) return;
-    const now = Date.now();
-    setClassTimer(null);
-    setActivityLog((prev) =>
-      prev.map((e) =>
-        e.timerId === CLASS_ID && e.status === "active"
-          ? { ...e, status: "removed", endedAt: now }
-          : e
-      )
-    );
-  }, []);
-
-  const classTogglePause = useCallback(() => {
-    setClassTimer((prev) => {
-      if (!prev || prev.isFinished) return prev;
-      const now = Date.now();
-      if (prev.isRunning) {
-        return { ...prev, isRunning: false, pauseStartedAt: now };
-      }
-      const addedPaused = prev.pauseStartedAt ? now - prev.pauseStartedAt : 0;
-      return {
-        ...prev,
-        isRunning: true,
-        pauseStartedAt: null,
-        totalPausedMs: prev.totalPausedMs + addedPaused,
-      };
-    });
-  }, []);
-
-  const classReset = useCallback(() => {
-    setClassTimer((prev) =>
-      prev
-        ? {
-            ...prev,
-            startTime: Date.now(),
-            totalPausedMs: 0,
-            pauseStartedAt: null,
-            isRunning: true,
-            isFinished: false,
-          }
-        : prev
-    );
-    // Re-activate log entry if we were tracking it
-    setActivityLog((prev) =>
-      prev.map((e) =>
-        e.timerId === CLASS_ID && e.status !== "active"
-          ? { ...e, status: "active", endedAt: null }
-          : e
-      )
-    );
-  }, []);
-
-  const classAddTime = useCallback((minutes) => {
-    suppressAlertsRef.current.add(CLASS_ID);
-    setClassTimer((prev) =>
-      prev && !prev.isFinished
-        ? { ...prev, startTime: prev.startTime + minutes * 60 * 1000 }
-        : prev
-    );
-  }, []);
-
-  const classSkip = useCallback(() => {
-    suppressAlertsRef.current.add(CLASS_ID);
-    setClassTimer((prev) => {
-      if (!prev || prev.isFinished) return prev;
-      const state = getPhaseState(prev, Date.now());
-      if (state.isFinished) return prev;
-      return { ...prev, startTime: prev.startTime - state.timeLeft * 1000 };
-    });
   }, []);
 
   // ---------- activity log actions ----------
@@ -955,9 +866,18 @@ export default function TeacherTimerApp() {
     }
   }, [students.length]);
 
-  const requestNotifications = useCallback(async () => {
+  const toggleNotifications = useCallback(async () => {
+    // Already on → turn off in-app (doesn't revoke OS permission)
+    if (settings.notificationsEnabled) {
+      setSettings((s) => ({ ...s, notificationsEnabled: false }));
+      return;
+    }
     if (typeof window === "undefined" || !("Notification" in window)) {
       alert("Notifications aren't supported on this device.");
+      return;
+    }
+    if (Notification.permission === "granted") {
+      setSettings((s) => ({ ...s, notificationsEnabled: true }));
       return;
     }
     if (Notification.permission === "denied") {
@@ -970,7 +890,7 @@ export default function TeacherTimerApp() {
       const perm = await Notification.requestPermission();
       setSettings((s) => ({ ...s, notificationsEnabled: perm === "granted" }));
     } catch {}
-  }, []);
+  }, [settings.notificationsEnabled]);
 
   // ---------- builder actions ----------
 
@@ -1090,19 +1010,24 @@ export default function TeacherTimerApp() {
               <span className="text-sm font-medium">Sound</span>
             </label>
             <button
-              onClick={requestNotifications}
+              onClick={toggleNotifications}
               className={clsx(
                 "px-3 py-2 border rounded-lg text-sm font-medium transition",
                 settings.notificationsEnabled
-                  ? "bg-emerald-50 border-emerald-400 text-emerald-700"
+                  ? "bg-emerald-50 border-emerald-400 text-emerald-700 hover:bg-emerald-100"
                   : "bg-white border-gray-300 hover:bg-gray-50"
               )}
+              title={
+                settings.notificationsEnabled
+                  ? "Click to turn off"
+                  : "Click to enable browser notifications"
+              }
             >
               {settings.notificationsEnabled
                 ? "Notifications on"
                 : "Enable notifications"}
             </button>
-            {(students.length > 0 || classTimer) && (
+            {students.length > 0 && (
               <button
                 onClick={() => setViewAll(true)}
                 className="px-3 py-2 border border-gray-300 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800"
@@ -1114,71 +1039,10 @@ export default function TeacherTimerApp() {
           </div>
         </header>
 
-        {classTimer ? (
-          <ClassTimerCard
-            classTimer={classTimer}
-            now={now}
-            onRemove={removeClassTimer}
-            onTogglePause={classTogglePause}
-            onReset={classReset}
-            onAddTime={classAddTime}
-            onSkip={classSkip}
-          />
-        ) : (
-          <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6 mb-6">
-            {!showClassPicker ? (
-              <div className="flex items-center justify-between gap-3 flex-wrap">
-                <div>
-                  <h2 className="text-lg font-semibold">Whole-class timer</h2>
-                  <p className="text-sm text-gray-500">
-                    Run one timer the whole class can follow.
-                  </p>
-                </div>
-                <button
-                  onClick={() => setShowClassPicker(true)}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold shrink-0"
-                >
-                  Start class timer
-                </button>
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-lg font-semibold">
-                    Pick a schedule for the whole class
-                  </h2>
-                  <button
-                    onClick={() => setShowClassPicker(false)}
-                    className="text-sm text-gray-500 hover:text-gray-700"
-                  >
-                    Cancel
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {allSchedules.map((schedule) => (
-                    <button
-                      key={schedule.id}
-                      onClick={() => startClassTimer(schedule)}
-                      className="p-4 border border-gray-300 rounded-lg w-full text-left bg-white hover:bg-blue-50 hover:border-blue-400 active:bg-blue-100 transition"
-                    >
-                      <h3 className="font-semibold text-gray-900">
-                        {schedule.name}
-                      </h3>
-                      <p className="text-sm text-gray-600 whitespace-pre-line mt-1">
-                        {schedule.description}
-                      </p>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </section>
-        )}
-
         <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6 mb-6">
           <h2 className="text-lg font-semibold mb-3">Start a new timer</h2>
           <Input
-            placeholder="Student name"
+            placeholder='Student name (use "Maya & Jamal" for partners)'
             value={studentName}
             onChange={(e) => setStudentName(e.target.value)}
             onFocus={unlock}
@@ -1356,7 +1220,7 @@ export default function TeacherTimerApp() {
           </section>
         )}
 
-        {students.length === 0 && !classTimer && (
+        {students.length === 0 && (
           <p className="text-center text-gray-500 mt-8">
             No active timers. Enter a name and pick a schedule above to start.
           </p>
@@ -1467,13 +1331,20 @@ export default function TeacherTimerApp() {
       {viewAll && (
         <ViewAllOverlay
           students={students}
-          classTimer={classTimer}
           now={now}
           onClose={() => setViewAll(false)}
           onTogglePause={togglePause}
           onReset={resetStudent}
-          onClassTogglePause={classTogglePause}
-          onClassReset={classReset}
+        />
+      )}
+
+      {acknowledgments.length > 0 && (
+        <AcknowledgmentStack
+          items={acknowledgments}
+          onDismiss={(id) =>
+            setAcknowledgments((prev) => prev.filter((a) => a.id !== id))
+          }
+          onDismissAll={() => setAcknowledgments([])}
         />
       )}
 
@@ -1842,164 +1713,6 @@ function FocusOverlay({
   );
 }
 
-// ---------- class timer card ----------
-
-function ClassTimerCard({
-  classTimer,
-  now,
-  onRemove,
-  onTogglePause,
-  onReset,
-  onAddTime,
-  onSkip,
-}) {
-  const state = getPhaseState(classTimer, now);
-  const currentPhase = classTimer.schedule.times[state.currentIndex];
-  const phaseDurationSec = currentPhase.duration * 60;
-  const phasePercent =
-    phaseDurationSec > 0
-      ? ((phaseDurationSec - state.timeLeft) / phaseDurationSec) * 100
-      : 100;
-  const overallPercent =
-    state.totalDuration > 0
-      ? (state.totalElapsed / state.totalDuration) * 100
-      : 0;
-  const nextPhase =
-    !state.isFinished &&
-    state.currentIndex < classTimer.schedule.times.length - 1
-      ? classTimer.schedule.times[state.currentIndex + 1]
-      : null;
-  const phaseEndDate = new Date(now + state.timeLeft * 1000);
-  const scheduleEndDate = new Date(
-    now + (state.totalDuration - state.totalElapsed) * 1000
-  );
-
-  return (
-    <section
-      className={clsx(
-        "rounded-xl shadow-lg p-5 md:p-7 mb-6 relative",
-        phaseColor(currentPhase.label, state.isFinished),
-        !classTimer.isRunning &&
-          !state.isFinished &&
-          "ring-4 ring-yellow-300 ring-inset"
-      )}
-    >
-      <div className="flex items-start justify-between gap-3 mb-3">
-        <div className="flex items-center gap-3 min-w-0 flex-1">
-          <div
-            className="shrink-0 w-14 h-14 md:w-16 md:h-16 rounded-full bg-white/20 ring-2 ring-white/40 flex items-center justify-center text-3xl"
-            aria-hidden="true"
-          >
-            👥
-          </div>
-          <div className="min-w-0 flex-1">
-            <h2 className="text-2xl md:text-3xl font-bold truncate">
-              Whole Class
-            </h2>
-            <p className="text-sm opacity-90 truncate">
-              {classTimer.scheduleName}
-            </p>
-          </div>
-        </div>
-        <button
-          onClick={onRemove}
-          className="shrink-0 w-9 h-9 flex items-center justify-center bg-black/25 hover:bg-black/40 rounded-full text-xl leading-none font-bold"
-          aria-label="End class timer"
-          title="End class timer"
-        >
-          ×
-        </button>
-      </div>
-
-      {state.isFinished ? (
-        <div className="text-center py-6 md:py-8">
-          <div className="text-4xl md:text-5xl font-bold mb-1">All done!</div>
-          <div className="text-sm opacity-90">Class schedule complete</div>
-        </div>
-      ) : (
-        <>
-          <div className="flex items-baseline justify-between mb-1">
-            <span className="text-sm md:text-base font-bold uppercase tracking-wide">
-              {currentPhase.label}
-              {!classTimer.isRunning && " (Paused)"}
-            </span>
-            <span className="text-xs opacity-80">
-              Phase {state.currentIndex + 1}/{classTimer.schedule.times.length}
-            </span>
-          </div>
-          <div className="text-6xl md:text-8xl font-mono font-bold text-center mb-3 tabular-nums">
-            {formatTime(state.timeLeft)}
-          </div>
-          <div className="bg-black/25 rounded-full h-3 mb-1 overflow-hidden">
-            <div
-              className="bg-white h-3 rounded-full transition-all duration-300"
-              style={{ width: `${phasePercent}%` }}
-            />
-          </div>
-          <div className="flex items-center justify-between text-xs md:text-sm opacity-90 mb-1">
-            <span>{Math.round(overallPercent)}% overall</span>
-            {nextPhase && (
-              <span>
-                Next: {nextPhase.label} ({nextPhase.duration}m)
-              </span>
-            )}
-          </div>
-          <div className="text-xs md:text-sm opacity-90 mb-4">
-            {classTimer.isRunning ? (
-              <>
-                Phase ends {formatClock(phaseEndDate)}
-                {" · "}Done {formatClock(scheduleEndDate)}
-              </>
-            ) : (
-              <>Paused — end times will resume when restarted</>
-            )}
-          </div>
-        </>
-      )}
-
-      {!state.isFinished && (
-        <div className="grid grid-cols-3 gap-2 mb-2">
-          <button
-            onClick={() => onAddTime(-5)}
-            className="py-3 bg-black/20 hover:bg-black/35 rounded-lg text-sm font-bold"
-          >
-            −5m
-          </button>
-          <button
-            onClick={() => onAddTime(5)}
-            className="py-3 bg-black/20 hover:bg-black/35 rounded-lg text-sm font-bold"
-          >
-            +5m
-          </button>
-          <button
-            onClick={onSkip}
-            className="py-3 bg-black/20 hover:bg-black/35 rounded-lg text-sm font-bold"
-          >
-            Skip ↪
-          </button>
-        </div>
-      )}
-
-      <div className="flex gap-2">
-        {!state.isFinished && (
-          <button
-            onClick={onTogglePause}
-            className="flex-1 py-3 md:py-4 bg-black/25 hover:bg-black/40 rounded-lg text-sm md:text-base font-bold uppercase tracking-wide"
-          >
-            {classTimer.isRunning ? "Pause" : "Resume"}
-          </button>
-        )}
-        <button
-          onClick={onReset}
-          className="flex-1 py-3 md:py-4 bg-black/25 hover:bg-black/40 rounded-lg text-sm md:text-base font-bold uppercase tracking-wide"
-        >
-          Reset
-        </button>
-      </div>
-    </section>
-  );
-}
-
 // ---------- undo toast ----------
 
 function UndoToast({ name, onUndo, onDismiss }) {
@@ -2033,13 +1746,10 @@ function UndoToast({ name, onUndo, onDismiss }) {
 
 function ViewAllOverlay({
   students,
-  classTimer,
   now,
   onClose,
   onTogglePause,
   onReset,
-  onClassTogglePause,
-  onClassReset,
 }) {
   // Close on Escape
   useEffect(() => {
@@ -2050,8 +1760,7 @@ function ViewAllOverlay({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const cardCount =
-    students.length + (classTimer ? 1 : 0);
+  const cardCount = students.length;
   // Adaptive grid: 1/2/3/4 columns by card count
   const gridCols =
     cardCount <= 1
@@ -2095,22 +1804,11 @@ function ViewAllOverlay({
           </div>
         ) : (
           <div className={clsx("grid gap-4", gridCols)}>
-            {classTimer && (
-              <ViewAllTile
-                key={CLASS_ID}
-                timer={classTimer}
-                now={now}
-                isClass={true}
-                onTogglePause={onClassTogglePause}
-                onReset={onClassReset}
-              />
-            )}
             {students.map((s) => (
               <ViewAllTile
                 key={s.id}
                 timer={s}
                 now={now}
-                isClass={false}
                 onTogglePause={() => onTogglePause(s.id)}
                 onReset={() => onReset(s.id)}
               />
@@ -2122,7 +1820,7 @@ function ViewAllOverlay({
   );
 }
 
-function ViewAllTile({ timer, now, isClass, onTogglePause, onReset }) {
+function ViewAllTile({ timer, now, onTogglePause, onReset }) {
   const state = getPhaseState(timer, now);
   const currentPhase = timer.schedule.times[state.currentIndex];
   const phaseDurationSec = currentPhase.duration * 60;
@@ -2143,18 +1841,12 @@ function ViewAllTile({ timer, now, isClass, onTogglePause, onReset }) {
       )}
     >
       <div className="flex items-center gap-3 mb-3">
-        {isClass ? (
-          <div className="shrink-0 w-12 h-12 rounded-full bg-white/20 ring-2 ring-white/40 flex items-center justify-center text-2xl">
-            👥
-          </div>
-        ) : (
-          <div
-            className="shrink-0 w-12 h-12 rounded-full ring-2 ring-white/40 flex items-center justify-center font-bold"
-            style={avatarStyle(timer.name)}
-          >
-            {getInitials(timer.name)}
-          </div>
-        )}
+        <div
+          className="shrink-0 w-12 h-12 rounded-full ring-2 ring-white/40 flex items-center justify-center font-bold"
+          style={avatarStyle(timer.name)}
+        >
+          {getInitials(timer.name)}
+        </div>
         <div className="min-w-0 flex-1">
           <h3 className="text-lg md:text-xl font-bold truncate">
             {timer.name}
@@ -2208,6 +1900,79 @@ function ViewAllTile({ timer, now, isClass, onTogglePause, onReset }) {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ---------- acknowledgment stack (top-right popups) ----------
+
+function AcknowledgmentStack({ items, onDismiss, onDismissAll }) {
+  return (
+    <div
+      className="fixed top-3 right-3 md:top-4 md:right-4 z-[60] flex flex-col gap-2 w-[min(22rem,calc(100vw-1.5rem))] pointer-events-none"
+      role="region"
+      aria-label="Phase change alerts requiring acknowledgment"
+    >
+      {items.length > 1 && (
+        <button
+          onClick={onDismissAll}
+          className="self-end pointer-events-auto text-xs font-semibold bg-gray-900 text-white px-3 py-1.5 rounded-full shadow-lg hover:bg-gray-700"
+        >
+          Dismiss all ({items.length})
+        </button>
+      )}
+      {items.map((item) => (
+        <div
+          key={item.id}
+          className={clsx(
+            "pointer-events-auto bg-white rounded-xl shadow-2xl border-l-8 p-4",
+            item.isFinished ? "border-rose-500" : "border-blue-500"
+          )}
+          role="alertdialog"
+          aria-modal="false"
+          aria-labelledby={`ack-${item.id}-title`}
+        >
+          <div className="flex items-start gap-3 mb-3">
+            <div
+              className="shrink-0 w-11 h-11 rounded-full flex items-center justify-center font-bold text-sm shadow-sm"
+              style={avatarStyle(item.studentName)}
+              aria-hidden="true"
+            >
+              {getInitials(item.studentName)}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p
+                id={`ack-${item.id}-title`}
+                className="font-bold text-lg leading-tight truncate text-gray-900"
+              >
+                {item.studentName}
+              </p>
+              <p className="text-sm text-gray-700">
+                {item.isFinished ? (
+                  <>
+                    <span className="font-semibold">All done!</span>{" "}
+                    <span className="text-gray-500">
+                      ({item.scheduleName} complete)
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    Now:{" "}
+                    <span className="font-semibold">{item.phaseName}</span>
+                  </>
+                )}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => onDismiss(item.id)}
+            className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-lg font-bold text-sm uppercase tracking-wide"
+            autoFocus
+          >
+            Got it
+          </button>
+        </div>
+      ))}
     </div>
   );
 }
