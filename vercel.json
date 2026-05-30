@@ -1,5 +1,8 @@
 {
   "routes": [
+    { "src": "/service-worker.js", "dest": "/service-worker.js" },
+    { "src": "/manifest.json", "dest": "/manifest.json" },
+    { "src": "/(icon-.*|apple-touch-icon|favicon-.*)\\.png", "dest": "/$1.png" },
     { "src": "/static/(.*)", "dest": "/static/$1" },
     { "src": "/(.*)", "dest": "/index.html" }
   ]
