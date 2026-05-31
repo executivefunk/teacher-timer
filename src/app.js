@@ -73,19 +73,6 @@ const presets = [
     ],
   },
   {
-    id: "preset-quick",
-    name: "Quick Focus",
-    description:
-      "📝 20 min → Work\n🔄 5 min → Break\n📖 20 min → Work\n🔄 5 min → Break\n✅ 10 min → Review & Next Steps\n\nGreat for: Short ~60-minute sessions.",
-    times: [
-      { label: "Work", duration: 20 },
-      { label: "Break", duration: 5 },
-      { label: "Work", duration: 20 },
-      { label: "Break", duration: 5 },
-      { label: "Review & Next Steps", duration: 10 },
-    ],
-  },
-  {
     id: "preset-pomodoro",
     name: "Classic Pomodoro",
     description:
@@ -401,9 +388,6 @@ export default function TeacherTimerApp() {
   const [lastRemoved, setLastRemoved] = useState(null); // {student, index, ts}
   const [showLog, setShowLog] = useState(false);
 
-  // Acknowledgment popups (require explicit dismissal)
-  const [acknowledgments, setAcknowledgments] = useState([]);
-
   const alertPlayerRef = useRef(null);
   const wakeLockRef = useRef(null);
   const prevPhaseRef = useRef({});
@@ -547,20 +531,6 @@ export default function TeacherTimerApp() {
       if (settings.soundEnabled && alertPlayerRef.current) {
         alertPlayerRef.current.play();
       }
-
-      // In-app acknowledgment popup (requires explicit dismissal)
-      setAcknowledgments((prev) => [
-        ...prev,
-        {
-          id: uuid(),
-          studentId: target.id,
-          studentName: target.name,
-          scheduleName: target.scheduleName,
-          phaseName,
-          isFinished: state.isFinished,
-          ts: now,
-        },
-      ]);
 
       // OS-level notification (cross-window). Stays until clicked thanks to
       // requireInteraction. Clicking it focuses our tab.
@@ -710,18 +680,6 @@ export default function TeacherTimerApp() {
     return () => clearTimeout(id);
   }, [lastRemoved]);
 
-  // Tab title flash: cross-window indicator of pending acknowledgments
-  useEffect(() => {
-    const baseTitle = "Teacher Timer";
-    if (acknowledgments.length > 0) {
-      document.title = `(${acknowledgments.length}) ${baseTitle} — alert${acknowledgments.length > 1 ? "s" : ""}`;
-    } else {
-      document.title = baseTitle;
-    }
-    return () => {
-      document.title = baseTitle;
-    };
-  }, [acknowledgments.length]);
 
   const togglePause = useCallback((id) => {
     setStudents((prev) =>
@@ -1338,16 +1296,6 @@ export default function TeacherTimerApp() {
         />
       )}
 
-      {acknowledgments.length > 0 && (
-        <AcknowledgmentStack
-          items={acknowledgments}
-          onDismiss={(id) =>
-            setAcknowledgments((prev) => prev.filter((a) => a.id !== id))
-          }
-          onDismissAll={() => setAcknowledgments([])}
-        />
-      )}
-
       {lastRemoved && (
         <UndoToast
           name={lastRemoved.student.name}
@@ -1744,6 +1692,23 @@ function UndoToast({ name, onUndo, onDismiss }) {
 
 // ---------- view-all overlay ----------
 
+function computeViewAllGrid(count, viewportWidth) {
+  if (count <= 0) return { cols: 1, rows: 1 };
+  // Cap cols by viewport width
+  const maxCols =
+    viewportWidth < 640
+      ? 2
+      : viewportWidth < 1024
+        ? 4
+        : viewportWidth < 1440
+          ? 5
+          : 6;
+  // Roughly square grid
+  const cols = Math.max(1, Math.min(Math.ceil(Math.sqrt(count)), maxCols));
+  const rows = Math.ceil(count / cols);
+  return { cols, rows };
+}
+
 function ViewAllOverlay({
   students,
   now,
@@ -1751,6 +1716,16 @@ function ViewAllOverlay({
   onTogglePause,
   onReset,
 }) {
+  const [viewportWidth, setViewportWidth] = useState(
+    typeof window !== "undefined" ? window.innerWidth : 1024
+  );
+
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
   // Close on Escape
   useEffect(() => {
     const onKey = (e) => {
@@ -1761,21 +1736,28 @@ function ViewAllOverlay({
   }, [onClose]);
 
   const cardCount = students.length;
-  // Adaptive grid: 1/2/3/4 columns by card count
-  const gridCols =
-    cardCount <= 1
-      ? "grid-cols-1"
+  const { cols, rows } = computeViewAllGrid(cardCount, viewportWidth);
+
+  // Density buckets drive font/avatar/button sizes per tile so the contents
+  // shrink along with the cells.
+  const density =
+    cardCount <= 2
+      ? "xl"
       : cardCount <= 4
-        ? "grid-cols-1 md:grid-cols-2"
+        ? "lg"
         : cardCount <= 9
-          ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
-          : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
+          ? "md"
+          : cardCount <= 16
+            ? "sm"
+            : "xs";
 
   return (
-    <div className="fixed inset-0 z-50 bg-black text-white overflow-auto">
-      <div className="sticky top-0 z-10 bg-black/85 backdrop-blur px-4 md:px-6 py-3 flex items-center justify-between border-b border-white/10">
-        <div>
-          <h2 className="text-lg md:text-xl font-bold">All active timers</h2>
+    <div className="fixed inset-0 z-50 bg-black text-white flex flex-col">
+      <div className="shrink-0 bg-black/85 backdrop-blur px-3 md:px-5 py-2.5 flex items-center justify-between border-b border-white/10">
+        <div className="min-w-0">
+          <h2 className="text-base md:text-lg font-bold leading-tight">
+            All active timers
+          </h2>
           <p className="text-xs text-gray-400">
             {cardCount === 0
               ? "No active timers"
@@ -1784,16 +1766,16 @@ function ViewAllOverlay({
         </div>
         <button
           onClick={onClose}
-          className="px-4 py-2 bg-white text-gray-900 rounded-lg text-sm font-bold hover:bg-gray-100"
+          className="shrink-0 px-3 py-1.5 md:px-4 md:py-2 bg-white text-gray-900 rounded-lg text-sm font-bold hover:bg-gray-100"
           title="Back to dashboard (Esc)"
         >
           Exit ×
         </button>
       </div>
 
-      <div className="p-4 md:p-6">
+      <div className="flex-1 min-h-0 p-2 md:p-3">
         {cardCount === 0 ? (
-          <div className="text-center mt-20 text-gray-400">
+          <div className="h-full flex flex-col items-center justify-center text-gray-400">
             <p className="text-lg">No active timers right now.</p>
             <button
               onClick={onClose}
@@ -1803,12 +1785,19 @@ function ViewAllOverlay({
             </button>
           </div>
         ) : (
-          <div className={clsx("grid gap-4", gridCols)}>
+          <div
+            className="h-full grid gap-2 md:gap-3"
+            style={{
+              gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+              gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
+            }}
+          >
             {students.map((s) => (
               <ViewAllTile
                 key={s.id}
                 timer={s}
                 now={now}
+                density={density}
                 onTogglePause={() => onTogglePause(s.id)}
                 onReset={() => onReset(s.id)}
               />
@@ -1820,7 +1809,75 @@ function ViewAllOverlay({
   );
 }
 
-function ViewAllTile({ timer, now, onTogglePause, onReset }) {
+const VIEW_ALL_SIZES = {
+  xl: {
+    padding: "p-4 md:p-5",
+    avatar: "w-14 h-14 text-base",
+    name: "text-2xl md:text-3xl",
+    schedule: "text-sm",
+    countdown: "text-6xl md:text-7xl",
+    label: "text-sm",
+    button: "py-3 text-sm",
+    showSchedule: true,
+    showProgress: true,
+    showEndTime: true,
+    showButtons: true,
+  },
+  lg: {
+    padding: "p-3 md:p-4",
+    avatar: "w-12 h-12 text-sm",
+    name: "text-xl md:text-2xl",
+    schedule: "text-xs",
+    countdown: "text-5xl md:text-6xl",
+    label: "text-xs",
+    button: "py-2.5 text-sm",
+    showSchedule: true,
+    showProgress: true,
+    showEndTime: true,
+    showButtons: true,
+  },
+  md: {
+    padding: "p-3",
+    avatar: "w-10 h-10 text-xs",
+    name: "text-lg md:text-xl",
+    schedule: "text-xs",
+    countdown: "text-4xl md:text-5xl",
+    label: "text-xs",
+    button: "py-2 text-xs",
+    showSchedule: true,
+    showProgress: true,
+    showEndTime: true,
+    showButtons: true,
+  },
+  sm: {
+    padding: "p-2",
+    avatar: "w-9 h-9 text-xs",
+    name: "text-base md:text-lg",
+    schedule: "text-[10px]",
+    countdown: "text-3xl md:text-4xl",
+    label: "text-[10px]",
+    button: "py-1.5 text-xs",
+    showSchedule: false,
+    showProgress: true,
+    showEndTime: false,
+    showButtons: true,
+  },
+  xs: {
+    padding: "p-1.5",
+    avatar: "w-7 h-7 text-[10px]",
+    name: "text-sm md:text-base",
+    schedule: "text-[10px]",
+    countdown: "text-2xl md:text-3xl",
+    label: "text-[10px]",
+    button: "py-1 text-[10px]",
+    showSchedule: false,
+    showProgress: true,
+    showEndTime: false,
+    showButtons: false,
+  },
+};
+
+function ViewAllTile({ timer, now, density, onTogglePause, onReset }) {
   const state = getPhaseState(timer, now);
   const currentPhase = timer.schedule.times[state.currentIndex];
   const phaseDurationSec = currentPhase.duration * 60;
@@ -1832,147 +1889,106 @@ function ViewAllTile({ timer, now, onTogglePause, onReset }) {
     now + (state.totalDuration - state.totalElapsed) * 1000
   );
 
+  const sz = VIEW_ALL_SIZES[density] || VIEW_ALL_SIZES.md;
+
   return (
     <div
       className={clsx(
-        "rounded-xl p-4 md:p-5 shadow-lg relative",
+        "rounded-xl shadow-lg relative h-full flex flex-col min-h-0 min-w-0 overflow-hidden",
+        sz.padding,
         phaseColor(currentPhase.label, state.isFinished),
         !timer.isRunning && !state.isFinished && "ring-4 ring-yellow-300 ring-inset"
       )}
     >
-      <div className="flex items-center gap-3 mb-3">
+      <div className="flex items-center gap-2 mb-1 shrink-0">
         <div
-          className="shrink-0 w-12 h-12 rounded-full ring-2 ring-white/40 flex items-center justify-center font-bold"
+          className={clsx(
+            "shrink-0 rounded-full ring-2 ring-white/40 flex items-center justify-center font-bold",
+            sz.avatar
+          )}
           style={avatarStyle(timer.name)}
         >
           {getInitials(timer.name)}
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className="text-lg md:text-xl font-bold truncate">
+          <h3 className={clsx("font-bold truncate leading-tight", sz.name)}>
             {timer.name}
           </h3>
-          <p className="text-xs opacity-90 truncate">{timer.scheduleName}</p>
+          {sz.showSchedule && (
+            <p className={clsx("opacity-90 truncate", sz.schedule)}>
+              {timer.scheduleName}
+            </p>
+          )}
         </div>
       </div>
 
       {state.isFinished ? (
-        <div className="text-center py-6">
-          <div className="text-3xl md:text-4xl font-bold">Done</div>
+        <div className="flex-1 flex items-center justify-center min-h-0">
+          <div className={clsx("font-bold", sz.countdown)}>Done</div>
         </div>
       ) : (
         <>
-          <div className="text-xs font-bold uppercase tracking-wider opacity-90 mb-1">
+          <div
+            className={clsx(
+              "font-bold uppercase tracking-wider opacity-90 shrink-0",
+              sz.label
+            )}
+          >
             {currentPhase.label}
             {!timer.isRunning && " (Paused)"}
           </div>
-          <div className="text-5xl md:text-7xl font-mono font-bold text-center tabular-nums leading-none my-3">
-            {formatTime(state.timeLeft)}
-          </div>
-          <div className="bg-black/30 rounded-full h-2 overflow-hidden mb-2">
+          <div className="flex-1 flex items-center justify-center min-h-0">
             <div
-              className="bg-white h-2 rounded-full transition-all duration-300"
-              style={{ width: `${phasePercent}%` }}
-            />
+              className={clsx(
+                "font-mono font-bold tabular-nums leading-none",
+                sz.countdown
+              )}
+            >
+              {formatTime(state.timeLeft)}
+            </div>
           </div>
-          <div className="text-xs opacity-90 mb-3">
-            {timer.isRunning ? (
-              <>Done at {formatClock(scheduleEndDate)}</>
-            ) : (
-              <>Paused</>
-            )}
-          </div>
+          {sz.showProgress && (
+            <div className="bg-black/30 rounded-full h-1.5 overflow-hidden mb-1 shrink-0">
+              <div
+                className="bg-white h-full rounded-full transition-all duration-300"
+                style={{ width: `${phasePercent}%` }}
+              />
+            </div>
+          )}
+          {sz.showEndTime && (
+            <div className={clsx("opacity-90 shrink-0 mb-1.5", sz.label)}>
+              {timer.isRunning ? (
+                <>Done at {formatClock(scheduleEndDate)}</>
+              ) : (
+                <>Paused</>
+              )}
+            </div>
+          )}
         </>
       )}
 
-      {!state.isFinished && (
-        <div className="flex gap-2">
+      {!state.isFinished && sz.showButtons && (
+        <div className="flex gap-1.5 shrink-0">
           <button
             onClick={onTogglePause}
-            className="flex-1 py-2.5 bg-black/30 hover:bg-black/50 rounded-lg text-sm font-bold uppercase"
+            className={clsx(
+              "flex-1 bg-black/30 hover:bg-black/50 rounded-lg font-bold uppercase",
+              sz.button
+            )}
           >
             {timer.isRunning ? "Pause" : "Resume"}
           </button>
           <button
             onClick={onReset}
-            className="flex-1 py-2.5 bg-black/30 hover:bg-black/50 rounded-lg text-sm font-bold uppercase"
+            className={clsx(
+              "flex-1 bg-black/30 hover:bg-black/50 rounded-lg font-bold uppercase",
+              sz.button
+            )}
           >
             Reset
           </button>
         </div>
       )}
-    </div>
-  );
-}
-
-// ---------- acknowledgment stack (top-right popups) ----------
-
-function AcknowledgmentStack({ items, onDismiss, onDismissAll }) {
-  return (
-    <div
-      className="fixed top-3 right-3 md:top-4 md:right-4 z-[60] flex flex-col gap-2 w-[min(22rem,calc(100vw-1.5rem))] pointer-events-none"
-      role="region"
-      aria-label="Phase change alerts requiring acknowledgment"
-    >
-      {items.length > 1 && (
-        <button
-          onClick={onDismissAll}
-          className="self-end pointer-events-auto text-xs font-semibold bg-gray-900 text-white px-3 py-1.5 rounded-full shadow-lg hover:bg-gray-700"
-        >
-          Dismiss all ({items.length})
-        </button>
-      )}
-      {items.map((item) => (
-        <div
-          key={item.id}
-          className={clsx(
-            "pointer-events-auto bg-white rounded-xl shadow-2xl border-l-8 p-4",
-            item.isFinished ? "border-rose-500" : "border-blue-500"
-          )}
-          role="alertdialog"
-          aria-modal="false"
-          aria-labelledby={`ack-${item.id}-title`}
-        >
-          <div className="flex items-start gap-3 mb-3">
-            <div
-              className="shrink-0 w-11 h-11 rounded-full flex items-center justify-center font-bold text-sm shadow-sm"
-              style={avatarStyle(item.studentName)}
-              aria-hidden="true"
-            >
-              {getInitials(item.studentName)}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p
-                id={`ack-${item.id}-title`}
-                className="font-bold text-lg leading-tight truncate text-gray-900"
-              >
-                {item.studentName}
-              </p>
-              <p className="text-sm text-gray-700">
-                {item.isFinished ? (
-                  <>
-                    <span className="font-semibold">All done!</span>{" "}
-                    <span className="text-gray-500">
-                      ({item.scheduleName} complete)
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    Now:{" "}
-                    <span className="font-semibold">{item.phaseName}</span>
-                  </>
-                )}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={() => onDismiss(item.id)}
-            className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-lg font-bold text-sm uppercase tracking-wide"
-            autoFocus
-          >
-            Got it
-          </button>
-        </div>
-      ))}
     </div>
   );
 }
