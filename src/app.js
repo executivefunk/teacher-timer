@@ -1000,7 +1000,7 @@ export default function TeacherTimerApp() {
         <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 md:p-6 mb-6">
           <h2 className="text-lg font-semibold mb-3">Start a new timer</h2>
           <Input
-            placeholder='Student name (use "Maya & Jamal" for partners)'
+            placeholder='Student name (use "Multiple Student Names" for partners)'
             value={studentName}
             onChange={(e) => setStudentName(e.target.value)}
             onFocus={unlock}
