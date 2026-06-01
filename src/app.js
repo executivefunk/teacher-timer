@@ -92,7 +92,7 @@ const presets = [
     id: "preset-partner",
     name: "Partner Mode",
     description:
-      "🤝 30 min → Work Together\n🔄 5 min → Break\n🤝 30 min → Work Together\n🔄 5 min → Break\n🤝 30 min → Work Together\n❓ 20 min → Review, Questions & Next Steps\n\nFor two or more students. Tip: enter names like \"Maya & Jamal\".",
+      "🤝 30 min → Work Together\n🔄 5 min → Break\n🤝 30 min → Work Together\n🔄 5 min → Break\n🤝 30 min → Work Together\n❓ 20 min → Review, Questions & Next Steps\n\nFor two or more students. Tip: enter names like \"Kimberly & Luis\".",
     times: [
       { label: "Work Together", duration: 30 },
       { label: "Break", duration: 5 },
